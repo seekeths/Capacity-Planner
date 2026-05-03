@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<!-- saved from url=(0073)file:///C:/Users/Player%202/Downloads/technician_capacity_planner_11.html -->
-<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-
+<html lang="en">
+<head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Capacity Planner</title>
-<script src="./Capacity Planner_files/xlsx.full.min.js.download"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -130,7 +130,7 @@
 <nav class="sidebar">
   <div class="sidebar-title">Capacity Planner<span>15 planners</span></div>
 
-  <div id="shopNav"><div class="shop-group"><div class="shop-header open" onclick="toggleShop(this)" data-shop="Merced"><span>Merced</span><span class="chevron">›</span></div><div class="crew-list open"><div class="nav-item active" data-shop="Merced" data-crew="43L" onclick="switchPlan(&#39;Merced&#39;,&#39;43L&#39;)"><span class="nav-dot" id="dot-Merced-43L" style="background: var(--green-text);"></span>Crew 43L</div><div class="nav-item" data-shop="Merced" data-crew="44L" onclick="switchPlan(&#39;Merced&#39;,&#39;44L&#39;)"><span class="nav-dot" id="dot-Merced-44L" style="background: var(--border2);"></span>Crew 44L</div><div class="nav-item" data-shop="Merced" data-crew="46L" onclick="switchPlan(&#39;Merced&#39;,&#39;46L&#39;)"><span class="nav-dot" id="dot-Merced-46L" style="background: var(--border2);"></span>Crew 46L</div></div></div><div class="shop-group"><div class="shop-header" onclick="toggleShop(this)" data-shop="Modesto"><span>Modesto</span><span class="chevron">›</span></div><div class="crew-list"><div class="nav-item" data-shop="Modesto" data-crew="43L" onclick="switchPlan(&#39;Modesto&#39;,&#39;43L&#39;)"><span class="nav-dot" id="dot-Modesto-43L" style="background: var(--border2);"></span>Crew 43L</div><div class="nav-item" data-shop="Modesto" data-crew="44L" onclick="switchPlan(&#39;Modesto&#39;,&#39;44L&#39;)"><span class="nav-dot" id="dot-Modesto-44L" style="background: var(--border2);"></span>Crew 44L</div><div class="nav-item" data-shop="Modesto" data-crew="46L" onclick="switchPlan(&#39;Modesto&#39;,&#39;46L&#39;)"><span class="nav-dot" id="dot-Modesto-46L" style="background: var(--border2);"></span>Crew 46L</div></div></div><div class="shop-group"><div class="shop-header" onclick="toggleShop(this)" data-shop="Stockton"><span>Stockton</span><span class="chevron">›</span></div><div class="crew-list"><div class="nav-item" data-shop="Stockton" data-crew="43L" onclick="switchPlan(&#39;Stockton&#39;,&#39;43L&#39;)"><span class="nav-dot" id="dot-Stockton-43L" style="background: var(--border2);"></span>Crew 43L</div><div class="nav-item" data-shop="Stockton" data-crew="44L" onclick="switchPlan(&#39;Stockton&#39;,&#39;44L&#39;)"><span class="nav-dot" id="dot-Stockton-44L" style="background: var(--border2);"></span>Crew 44L</div><div class="nav-item" data-shop="Stockton" data-crew="46L" onclick="switchPlan(&#39;Stockton&#39;,&#39;46L&#39;)"><span class="nav-dot" id="dot-Stockton-46L" style="background: var(--border2);"></span>Crew 46L</div></div></div><div class="shop-group"><div class="shop-header" onclick="toggleShop(this)" data-shop="Jackson"><span>Jackson</span><span class="chevron">›</span></div><div class="crew-list"><div class="nav-item" data-shop="Jackson" data-crew="43L" onclick="switchPlan(&#39;Jackson&#39;,&#39;43L&#39;)"><span class="nav-dot" id="dot-Jackson-43L" style="background: var(--border2);"></span>Crew 43L</div><div class="nav-item" data-shop="Jackson" data-crew="44L" onclick="switchPlan(&#39;Jackson&#39;,&#39;44L&#39;)"><span class="nav-dot" id="dot-Jackson-44L" style="background: var(--border2);"></span>Crew 44L</div><div class="nav-item" data-shop="Jackson" data-crew="46L" onclick="switchPlan(&#39;Jackson&#39;,&#39;46L&#39;)"><span class="nav-dot" id="dot-Jackson-46L" style="background: var(--border2);"></span>Crew 46L</div></div></div><div class="shop-group"><div class="shop-header" onclick="toggleShop(this)" data-shop="Sonora"><span>Sonora</span><span class="chevron">›</span></div><div class="crew-list"><div class="nav-item" data-shop="Sonora" data-crew="43L" onclick="switchPlan(&#39;Sonora&#39;,&#39;43L&#39;)"><span class="nav-dot" id="dot-Sonora-43L" style="background: var(--border2);"></span>Crew 43L</div><div class="nav-item" data-shop="Sonora" data-crew="44L" onclick="switchPlan(&#39;Sonora&#39;,&#39;44L&#39;)"><span class="nav-dot" id="dot-Sonora-44L" style="background: var(--border2);"></span>Crew 44L</div><div class="nav-item" data-shop="Sonora" data-crew="46L" onclick="switchPlan(&#39;Sonora&#39;,&#39;46L&#39;)"><span class="nav-dot" id="dot-Sonora-46L" style="background: var(--border2);"></span>Crew 46L</div></div></div></div>
+  <div id="shopNav"></div>
 
   <div class="sidebar-footer" id="savedTag">💾 Auto-saved</div>
 </nav>
@@ -138,7 +138,7 @@
 <div class="main">
   <div class="page-header">
     <div>
-      <h1 id="pageTitle">Merced — Crew 43L</h1>
+      <h1 id="pageTitle">—</h1>
       <p>Capacity-filling scheduler — Earliest Deadline First</p>
     </div>
   </div>
@@ -172,16 +172,16 @@
       <p class="slabel">Summary</p>
       <div class="kgrid" id="kpiGrid"></div>
       <div class="tabs">
-        <button class="tab active" onclick="switchTab(&#39;jobs&#39;)">Jobs</button>
-        <button class="tab" onclick="switchTab(&#39;weeks&#39;)">Weekly capacity</button>
-        <button class="tab" onclick="switchTab(&#39;alloc&#39;)">Allocation detail</button>
+        <button class="tab active" onclick="switchTab('jobs')">Jobs</button>
+        <button class="tab"        onclick="switchTab('weeks')">Weekly capacity</button>
+        <button class="tab"        onclick="switchTab('alloc')">Allocation detail</button>
       </div>
-      <div id="pane-jobs" class="pane active"><div class="tw" id="tbl-jobs"></div></div>
+      <div id="pane-jobs"  class="pane active"><div class="tw" id="tbl-jobs"></div></div>
       <div id="pane-weeks" class="pane"><div class="tw" id="tbl-weeks"></div></div>
       <div id="pane-alloc" class="pane"><div class="tw" id="tbl-alloc"></div></div>
       <div class="xrow">
         <button class="bp" onclick="downloadExcel()">Download Excel</button>
-        <span class="hint" id="xlHint">Downloads schedule for Merced / Crew 43L</span>
+        <span class="hint" id="xlHint"></span>
       </div>
     </div>
   </div>
@@ -566,6 +566,5 @@ document.getElementById('pageTitle').textContent=current.shop+' — Crew '+curre
 document.getElementById('xlHint').textContent='Downloads schedule for '+current.shop+' / Crew '+current.crew;
 updateDots();
 </script>
-
-
-</body></html>
+</body>
+</html>
