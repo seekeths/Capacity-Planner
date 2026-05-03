@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<!-- saved from url=(0073)file:///C:/Users/Player%202/Downloads/technician_capacity_planner_10.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capacity Planner</title>
+<script src="./Capacity Planner_files/xlsx.full.min.js.download"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#ffffff; --bg2:#f5f5f3; --bg3:#efefec;
+    --text:#1a1a1a; --text2:#6b6b6b; --text3:#9b9b9b;
+    --border:rgba(0,0,0,0.12); --border2:rgba(0,0,0,0.22); --border3:rgba(0,0,0,0.38);
+    --green-bg:#eaf3de; --green-text:#3b6d11;
+    --red-bg:#fcebeb; --red-text:#a32d2d;
+    --blue:#185fa5; --r:8px; --nav-w:210px;
+    --font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#1e1e1c;--bg2:#2a2a28;--bg3:#333330;
+      --text:#f0f0ee;--text2:#a8a8a4;--text3:#6e6e6a;
+      --border:rgba(255,255,255,0.1);--border2:rgba(255,255,255,0.18);--border3:rgba(255,255,255,0.28);
+      --green-bg:#173404;--green-text:#c0dd97;--red-bg:#501313;--red-text:#f7c1c1;--blue:#b5d4f4;
+    }
+  }
+  body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh;display:flex;}
+
+  /* sidebar */
+  .sidebar{width:var(--nav-w);min-height:100vh;background:var(--bg);border-right:0.5px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:10;overflow-y:auto;}
+  .sidebar-title{padding:1.1rem 1rem .9rem;font-size:13px;font-weight:700;border-bottom:0.5px solid var(--border);}
+  .sidebar-title span{display:block;font-size:10px;font-weight:500;color:var(--text3);margin-top:2px;letter-spacing:.05em;text-transform:uppercase;}
+  .shop-group{border-bottom:0.5px solid var(--border);}
+  .shop-header{
+    padding:8px 1rem 6px;
+    font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:space-between;
+    transition:color .12s;user-select:none;
+  }
+  .shop-header:hover{color:var(--text);}
+  .shop-header .chevron{font-size:10px;transition:transform .15s;color:var(--text3);}
+  .shop-header.open .chevron{transform:rotate(90deg);}
+  .crew-list{display:none;padding-bottom:4px;}
+  .crew-list.open{display:block;}
+  .nav-item{
+    display:flex;align-items:center;gap:8px;padding:6px 1rem 6px 1.5rem;
+    cursor:pointer;font-size:13px;color:var(--text2);
+    border-left:2px solid transparent;transition:all .12s;
+  }
+  .nav-item:hover{background:var(--bg2);color:var(--text);}
+  .nav-item.active{color:var(--text);font-weight:500;border-left-color:var(--text);background:var(--bg2);}
+  .nav-dot{width:7px;height:7px;border-radius:50%;background:var(--border2);flex-shrink:0;transition:background .15s;}
+  .nav-item.active .nav-dot{background:var(--green-text);}
+  .sidebar-footer{margin-top:auto;padding:.75rem 1rem;border-top:0.5px solid var(--border);font-size:11px;color:var(--text3);}
+
+  /* main */
+  .main{margin-left:var(--nav-w);flex:1;padding:2rem 1.5rem 4rem;max-width:980px;}
+  .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.5rem;}
+  .page-header h1{font-size:20px;font-weight:600;letter-spacing:-.3px;margin-bottom:2px;}
+  .page-header p{font-size:13px;color:var(--text2);}
+
+  /* cards */
+  .card{background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1rem;}
+  .slabel{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-bottom:12px;}
+  .sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field label{font-size:12px;color:var(--text2);font-weight:500;}
+  .field input{height:36px;padding:0 10px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg2);color:var(--text);font-size:13px;font-family:var(--font);outline:none;transition:border-color .15s,box-shadow .15s;}
+  .field input:focus{border-color:var(--border3);background:var(--bg);box-shadow:0 0 0 3px rgba(0,0,0,.06);}
+
+  /* jobs */
+  .jhdr{display:grid;grid-template-columns:90px 1fr 90px 130px 130px 36px;gap:8px;padding:0 8px 8px;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;}
+  .jrow{display:grid;grid-template-columns:90px 1fr 90px 130px 130px 36px;gap:8px;align-items:center;padding:8px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);margin-bottom:6px;transition:border-color .15s;}
+  .jrow:hover{border-color:var(--border2);}
+  .jrow input{height:30px;padding:0 8px;border:0.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px;font-family:var(--font);width:100%;outline:none;transition:border-color .15s;}
+  .jrow input:focus{border-color:var(--border3);}
+  .jrow input[type="date"]{font-size:11px;padding:0 6px;}
+  .bdel{width:30px;height:30px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+  .bdel:hover{background:var(--red-bg);color:var(--red-text);border-color:var(--red-text);}
+
+  /* buttons */
+  .actions{display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap;}
+  .bp{height:36px;padding:0 18px;background:var(--text);color:var(--bg);border:none;border-radius:var(--r);font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font);transition:opacity .15s;}
+  .bp:hover{opacity:.82;} .bp:active{opacity:.65;transform:scale(.98);}
+  .bs{height:36px;padding:0 14px;background:transparent;color:var(--text);border:0.5px solid var(--border2);border-radius:var(--r);font-size:13px;cursor:pointer;font-family:var(--font);transition:background .15s;}
+  .bs:hover{background:var(--bg2);}
+  .breset{height:36px;padding:0 14px;background:transparent;color:var(--red-text);border:0.5px solid var(--red-text);border-radius:var(--r);font-size:13px;cursor:pointer;font-family:var(--font);margin-left:auto;}
+  .breset:hover{background:var(--red-bg);}
+  .err{font-size:12px;color:var(--red-text);margin-top:8px;min-height:18px;}
+
+  /* kpis */
+  .kgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem;}
+  .kpi{background:var(--bg2);border-radius:var(--r);padding:14px;}
+  .kpi-l{font-size:11px;color:var(--text2);margin-bottom:6px;}
+  .kpi-v{font-size:26px;font-weight:500;}
+  .kpi.good .kpi-v{color:var(--green-text);} .kpi.bad .kpi-v{color:var(--red-text);}
+
+  /* result tabs */
+  .tabs{display:flex;gap:2px;border-bottom:0.5px solid var(--border);margin-bottom:1rem;}
+  .tab{padding:8px 16px;font-size:13px;font-weight:500;background:none;border:none;cursor:pointer;color:var(--text2);border-bottom:2px solid transparent;margin-bottom:-1px;font-family:var(--font);transition:color .15s;}
+  .tab.active{color:var(--text);border-bottom-color:var(--text);}
+  .pane{display:none;} .pane.active{display:block;}
+  .tw{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;border-bottom:0.5px solid var(--border);white-space:nowrap;}
+  td{padding:9px 12px;border-bottom:0.5px solid var(--border);vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  tbody tr:hover td{background:var(--bg2);}
+  .badge{display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:100px;letter-spacing:.04em;text-transform:uppercase;}
+  .badge.ok{background:var(--green-bg);color:var(--green-text);}
+  .badge.bad{background:var(--red-bg);color:var(--red-text);}
+  .bw{width:80px;background:var(--bg3);border-radius:4px;height:6px;display:inline-block;vertical-align:middle;overflow:hidden;}
+  .bar{height:100%;border-radius:4px;background:var(--blue);}
+  .bar.over{background:var(--red-text);}
+  .xrow{display:flex;align-items:center;gap:12px;padding-top:1rem;border-top:0.5px solid var(--border);margin-top:1.25rem;flex-wrap:wrap;}
+  .xrow .hint{font-size:12px;color:var(--text3);}
+  #results{display:none;}
+
+  /* dialog */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .15s;}
+  .overlay.show{opacity:1;pointer-events:all;}
+  .dialog{background:var(--bg);border-radius:12px;padding:1.5rem;width:320px;box-shadow:0 8px 32px rgba(0,0,0,.18);}
+  .dialog h3{font-size:15px;font-weight:600;margin-bottom:8px;}
+  .dialog p{font-size:13px;color:var(--text2);margin-bottom:1.25rem;}
+  .dialog-btns{display:flex;gap:8px;justify-content:flex-end;}
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-title">Capacity Planner<span>15 planners</span></div>
+
+  <div id="shopNav"><div class="shop-group"><div class="shop-header" onclick="toggleShop(this)" data-shop="Merced"><span>Merced</span><span class="chevron">›</span></div><div class="crew-list"><div class="nav-item" data-shop="Merced" data-crew="43L" onclick="switchPlan(&#39;Merced&#39;,&#39;43L&#39;)"><span class="nav-dot" id="dot-Merced-43L" style="background: var(--border2);"></span>Crew 43L</div><div class="nav-item" data-shop="Merced" data-crew="44L" onclick="switchPlan(&#39;Merced&#39;,&#39;44L&#39;)"><span class="nav-dot" id="dot-Merced-44L" style="background: var(--border2);"></span>Crew 44L</div><div class="nav-item" data-shop="Merced" data-crew="46L" onclick="switchPlan(&#39;Merced&#39;,&#39;46L&#39;)"><span class="nav-dot" id="dot-Merced-46L" style="background: var(--border2);"></span>Crew 46L</div></div></div><div class="shop-group"><div class="shop-header" onclick="toggleShop(this)" data-shop="Modesto"><span>Modesto</span><span class="chevron">›</span></div><div class="crew-list"><div class="nav-item" data-shop="Modesto" data-crew="43L" onclick="switchPlan(&#39;Modesto&#39;,&#39;43L&#39;)"><span class="nav-dot" id="dot-Modesto-43L" style="background: var(--border2);"></span>Crew 43L</div><div class="nav-item" data-shop="Modesto" data-crew="44L" onclick="switchPlan(&#39;Modesto&#39;,&#39;44L&#39;)"><span class="nav-dot" id="dot-Modesto-44L" style="background: var(--border2);"></span>Crew 44L</div><div class="nav-item" data-shop="Modesto" data-crew="46L" onclick="switchPlan(&#39;Modesto&#39;,&#39;46L&#39;)"><span class="nav-dot" id="dot-Modesto-46L" style="background: var(--border2);"></span>Crew 46L</div></div></div><div class="shop-group"><div class="shop-header" onclick="toggleShop(this)" data-shop="Stockton"><span>Stockton</span><span class="chevron">›</span></div><div class="crew-list"><div class="nav-item active" data-shop="Stockton" data-crew="43L" onclick="switchPlan(&#39;Stockton&#39;,&#39;43L&#39;)"><span class="nav-dot" id="dot-Stockton-43L" style="background: var(--border2);"></span>Crew 43L</div><div class="nav-item" data-shop="Stockton" data-crew="44L" onclick="switchPlan(&#39;Stockton&#39;,&#39;44L&#39;)"><span class="nav-dot" id="dot-Stockton-44L" style="background: var(--border2);"></span>Crew 44L</div><div class="nav-item" data-shop="Stockton" data-crew="46L" onclick="switchPlan(&#39;Stockton&#39;,&#39;46L&#39;)"><span class="nav-dot" id="dot-Stockton-46L" style="background: var(--border2);"></span>Crew 46L</div></div></div><div class="shop-group"><div class="shop-header" onclick="toggleShop(this)" data-shop="Jackson"><span>Jackson</span><span class="chevron">›</span></div><div class="crew-list"><div class="nav-item" data-shop="Jackson" data-crew="43L" onclick="switchPlan(&#39;Jackson&#39;,&#39;43L&#39;)"><span class="nav-dot" id="dot-Jackson-43L" style="background: var(--border2);"></span>Crew 43L</div><div class="nav-item" data-shop="Jackson" data-crew="44L" onclick="switchPlan(&#39;Jackson&#39;,&#39;44L&#39;)"><span class="nav-dot" id="dot-Jackson-44L" style="background: var(--border2);"></span>Crew 44L</div><div class="nav-item" data-shop="Jackson" data-crew="46L" onclick="switchPlan(&#39;Jackson&#39;,&#39;46L&#39;)"><span class="nav-dot" id="dot-Jackson-46L" style="background: var(--border2);"></span>Crew 46L</div></div></div><div class="shop-group"><div class="shop-header" onclick="toggleShop(this)" data-shop="Sonora"><span>Sonora</span><span class="chevron">›</span></div><div class="crew-list"><div class="nav-item" data-shop="Sonora" data-crew="43L" onclick="switchPlan(&#39;Sonora&#39;,&#39;43L&#39;)"><span class="nav-dot" id="dot-Sonora-43L" style="background: var(--border2);"></span>Crew 43L</div><div class="nav-item" data-shop="Sonora" data-crew="44L" onclick="switchPlan(&#39;Sonora&#39;,&#39;44L&#39;)"><span class="nav-dot" id="dot-Sonora-44L" style="background: var(--border2);"></span>Crew 44L</div><div class="nav-item" data-shop="Sonora" data-crew="46L" onclick="switchPlan(&#39;Sonora&#39;,&#39;46L&#39;)"><span class="nav-dot" id="dot-Sonora-46L" style="background: var(--green-text);"></span>Crew 46L</div></div></div></div>
+
+  <div class="sidebar-footer" id="savedTag">💾 Auto-saved</div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <div>
+      <h1 id="pageTitle">Stockton — Crew 43L</h1>
+      <p>Capacity-filling scheduler — Earliest Deadline First</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="slabel">Settings</p>
+    <div class="sgrid">
+      <div class="field"><label>Technicians</label><input type="number" id="techCount" value="5" min="1" oninput="saveNow()"></div>
+      <div class="field"><label>Hours / technician / week</label><input type="number" id="hrsPerWeek" value="40" min="1" oninput="saveNow()"></div>
+      <div class="field"><label>Weeks to plan</label><input type="number" id="numWeeks" value="12" min="1" oninput="saveNow()"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="slabel">Jobs</p>
+    <div class="jhdr">
+      <span>Job ID</span><span>Description</span><span>Hours</span>
+      <span>Start date</span><span>End date</span><span></span>
+    </div>
+    <div id="jobsList"></div>
+    <div class="actions">
+      <button class="bs" onclick="addJob()">+ Add job</button>
+      <button class="bp" onclick="runSchedule()">Calculate schedule</button>
+      <button class="breset" onclick="showReset()">Reset</button>
+    </div>
+    <div id="errMsg" class="err"></div>
+  </div>
+
+  <div id="results" style="display: none;">
+    <div class="card">
+      <p class="slabel">Summary</p>
+      <div class="kgrid" id="kpiGrid"></div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab(&#39;jobs&#39;)">Jobs</button>
+        <button class="tab" onclick="switchTab(&#39;weeks&#39;)">Weekly capacity</button>
+        <button class="tab" onclick="switchTab(&#39;alloc&#39;)">Allocation detail</button>
+      </div>
+      <div id="pane-jobs" class="pane active"><div class="tw" id="tbl-jobs"></div></div>
+      <div id="pane-weeks" class="pane"><div class="tw" id="tbl-weeks"></div></div>
+      <div id="pane-alloc" class="pane"><div class="tw" id="tbl-alloc"></div></div>
+      <div class="xrow">
+        <button class="bp" onclick="downloadExcel()">Download Excel</button>
+        <span class="hint" id="xlHint">Downloads schedule for Stockton / Crew 43L</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="dialog">
+    <h3 id="dlgTitle">Reset this planner?</h3>
+    <p>This clears all jobs and resets settings to defaults for this planner only.</p>
+    <div class="dialog-btns">
+      <button class="bs" onclick="hideReset()">Cancel</button>
+      <button class="bp" style="background:var(--red-text)" onclick="doReset()">Reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── config ────────────────────────────────────────────────────────────────────
+var SHOPS  = ['Merced','Modesto','Stockton','Jackson','Sonora'];
+var CREWS  = ['43L','44L','46L'];
+var STORE  = 'tcp_v3_';
+var uid    = 0;
+var R      = null;
+var current = { shop: SHOPS[0], crew: CREWS[0] };
+
+function planKey(shop, crew) { return STORE + shop + '_' + crew; }
+function currentKey()        { return planKey(current.shop, current.crew); }
+
+// ── storage ───────────────────────────────────────────────────────────────────
+function loadPlan(shop, crew) {
+  try { var r=localStorage.getItem(planKey(shop,crew)); return r?JSON.parse(r):null; } catch(e){ return null; }
+}
+function savePlan(shop, crew, state) {
+  try { localStorage.setItem(planKey(shop,crew), JSON.stringify(state)); } catch(e){}
+}
+function currentState() {
+  return {
+    tc:   parseInt(document.getElementById('techCount').value)||5,
+    hp:   parseInt(document.getElementById('hrsPerWeek').value)||40,
+    nw:   parseInt(document.getElementById('numWeeks').value)||12,
+    jobs: getJobs()
+  };
+}
+var saveTimer=null;
+function saveNow() {
+  savePlan(current.shop, current.crew, currentState());
+  updateDots();
+  var tag=document.getElementById('savedTag');
+  tag.textContent='💾 Saved';
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){ tag.textContent='💾 Auto-saved'; },1500);
+}
+
+// ── build sidebar nav ─────────────────────────────────────────────────────────
+function buildNav() {
+  var html='';
+  SHOPS.forEach(function(shop) {
+    var isFirstShop = shop===SHOPS[0];
+    html += '<div class="shop-group">';
+    html += '<div class="shop-header'+(isFirstShop?' open':'')+'" onclick="toggleShop(this)" data-shop="'+shop+'">';
+    html += '<span>'+shop+'</span><span class="chevron">›</span></div>';
+    html += '<div class="crew-list'+(isFirstShop?' open':'')+'">';
+    CREWS.forEach(function(crew) {
+      var isActive = isFirstShop && crew===CREWS[0];
+      html += '<div class="nav-item'+(isActive?' active':'')+'" data-shop="'+shop+'" data-crew="'+crew+'" onclick="switchPlan(\''+shop+'\',\''+crew+'\')">';
+      html += '<span class="nav-dot" id="dot-'+shop+'-'+crew+'"></span>Crew '+crew+'</div>';
+    });
+    html += '</div></div>';
+  });
+  document.getElementById('shopNav').innerHTML = html;
+}
+
+function toggleShop(el) {
+  el.classList.toggle('open');
+  el.nextElementSibling.classList.toggle('open');
+}
+
+function switchPlan(shop, crew) {
+  saveNow();
+  current.shop = shop; current.crew = crew;
+
+  document.querySelectorAll('.nav-item').forEach(function(el){
+    el.classList.toggle('active', el.dataset.shop===shop && el.dataset.crew===crew);
+  });
+
+  // ensure this shop is expanded
+  document.querySelectorAll('.shop-header').forEach(function(el){
+    if(el.dataset.shop===shop){
+      el.classList.add('open');
+      el.nextElementSibling.classList.add('open');
+    }
+  });
+
+  document.getElementById('pageTitle').textContent = shop+' — Crew '+crew;
+  document.getElementById('xlHint').textContent = 'Downloads schedule for '+shop+' / Crew '+crew;
+
+  var state = loadPlan(shop,crew) || {tc:5,hp:40,nw:12,jobs:[]};
+  loadIntoUI(state);
+  document.getElementById('results').style.display='none';
+  document.getElementById('errMsg').textContent='';
+  R=null;
+}
+
+function updateDots() {
+  SHOPS.forEach(function(shop){
+    CREWS.forEach(function(crew){
+      var dot=document.getElementById('dot-'+shop+'-'+crew);
+      if(!dot) return;
+      var state=loadPlan(shop,crew);
+      var hasJobs=state&&state.jobs&&state.jobs.some(function(j){return j.id;});
+      if(shop===current.shop&&crew===current.crew) dot.style.background='var(--green-text)';
+      else if(hasJobs) dot.style.background='var(--blue)';
+      else dot.style.background='var(--border2)';
+    });
+  });
+}
+
+// ── reset ─────────────────────────────────────────────────────────────────────
+function showReset() {
+  document.getElementById('dlgTitle').textContent='Reset '+current.shop+' / Crew '+current.crew+'?';
+  document.getElementById('overlay').classList.add('show');
+}
+function hideReset(){ document.getElementById('overlay').classList.remove('show'); }
+function doReset(){
+  hideReset();
+  savePlan(current.shop,current.crew,{tc:5,hp:40,nw:12,jobs:[]});
+  loadIntoUI({tc:5,hp:40,nw:12,jobs:[]});
+  document.getElementById('results').style.display='none';
+  R=null; updateDots();
+}
+
+// ── dom ───────────────────────────────────────────────────────────────────────
+function addJob(d,skipSave){
+  d=d||{}; var u=++uid;
+  var row=document.createElement('div');
+  row.className='jrow'; row.dataset.u=u;
+  row.innerHTML=
+    '<input class="jid"   type="text"   placeholder="J00'+u+'" value="'+(d.id||'')+'">' +
+    '<input class="jname" type="text"   placeholder="Description" value="'+(d.name||'')+'">' +
+    '<input class="jhrs"  type="number" placeholder="0" min="1" value="'+(d.hrs||'')+'">' +
+    '<input class="jsd"   type="date"   value="'+(d.start||'')+'">' +
+    '<input class="jed"   type="date"   value="'+(d.end||'')+'">' +
+    '<button class="bdel" onclick="removeJob(this)">✕</button>';
+  row.querySelectorAll('input').forEach(function(inp){
+    inp.addEventListener('input', saveNow);
+    inp.addEventListener('change', saveNow);
+  });
+  document.getElementById('jobsList').appendChild(row);
+  if(!skipSave) saveNow();
+}
+
+function removeJob(btn){ btn.closest('.jrow').remove(); saveNow(); }
+
+function getJobs(){
+  return Array.from(document.querySelectorAll('.jrow')).map(function(r){
+    return {
+      id:    r.querySelector('.jid').value.trim(),
+      name:  r.querySelector('.jname').value.trim(),
+      hrs:   parseFloat(r.querySelector('.jhrs').value)||0,
+      start: r.querySelector('.jsd').value,
+      end:   r.querySelector('.jed').value,
+    };
+  });
+}
+
+function loadIntoUI(state){
+  document.getElementById('techCount').value  = state.tc||5;
+  document.getElementById('hrsPerWeek').value = state.hp||40;
+  document.getElementById('numWeeks').value   = state.nw||12;
+  document.getElementById('jobsList').innerHTML='';
+  uid=0;
+  (state.jobs||[]).forEach(function(j){ addJob(j,true); });
+}
+
+function setErr(m){ document.getElementById('errMsg').textContent=m||''; }
+
+function switchTab(name){
+  var names=['jobs','weeks','alloc'];
+  document.querySelectorAll('.tab').forEach(function(b,i){ b.classList.toggle('active',names[i]===name); });
+  document.querySelectorAll('.pane').forEach(function(p){ p.classList.toggle('active',p.id==='pane-'+name); });
+}
+
+// ── dates ─────────────────────────────────────────────────────────────────────
+function pd(s){ var p=s.split('-').map(Number); return new Date(p[0],p[1]-1,p[2]); }
+function fmt(d){ return d.toLocaleDateString('en-US',{month:'short',day:'2-digit',year:'numeric'}); }
+function addD(d,n){ var r=new Date(d); r.setDate(r.getDate()+n); return r; }
+function nextMon(d){
+  var r=new Date(d),day=r.getDay();
+  r.setDate(r.getDate()+(day===1?0:day===0?1:8-day));
+  return r;
+}
+
+// ── scheduler ─────────────────────────────────────────────────────────────────
+function networkdays(start,end){
+  var count=0,d=new Date(start);
+  while(d<=end){ if(d.getDay()>=1&&d.getDay()<=5) count++; d.setDate(d.getDate()+1); }
+  return count;
+}
+
+function capacityFill(jobs,weeks,cap){
+  var edf=jobs.slice().sort(function(a,b){ return pd(a.end)-pd(b.end); });
+  var rem={};
+  jobs.forEach(function(j){ rem[j.id]=j.hrs; });
+  var alloc={};
+  weeks.forEach(function(ws){
+    var we=addD(ws,4),left=cap;
+    edf.forEach(function(j){
+      var key=j.id+'|'+ws.getTime(),sd=pd(j.start),ed=pd(j.end);
+      if(ws>ed||we<sd||rem[j.id]<=0){ alloc[key]=0; return; }
+      var os=sd>ws?sd:ws, oe=ed<we?ed:we;
+      var dtw=networkdays(os,oe), dr=networkdays(os,ed);
+      var max=dr>0?rem[j.id]*(dtw/dr):rem[j.id];
+      var assign=Math.min(max,rem[j.id],left);
+      alloc[key]=assign; rem[j.id]-=assign; left-=assign;
+    });
+  });
+  return {alloc:alloc,rem:rem};
+}
+
+function runSchedule(){
+  setErr();
+  var tc=parseInt(document.getElementById('techCount').value);
+  var hp=parseInt(document.getElementById('hrsPerWeek').value);
+  var nw=parseInt(document.getElementById('numWeeks').value);
+  var cap=tc*hp, jobs=getJobs();
+
+  if(!jobs.length)             return setErr('Add at least one job.');
+  for(var i=0;i<jobs.length;i++){
+    var j=jobs[i];
+    if(!j.id)                  return setErr('Every job needs a Job ID.');
+    if(!j.name)                return setErr('Job '+j.id+': description required.');
+    if(j.hrs<=0)               return setErr('Job '+j.id+': hours must be > 0.');
+    if(!j.start||!j.end)       return setErr('Job '+j.id+': start and end dates required.');
+    if(pd(j.start)>pd(j.end))  return setErr('Job '+j.id+': start must be before end.');
+  }
+
+  var first=jobs.reduce(function(m,j){ return pd(j.start)<m?pd(j.start):m; },pd(jobs[0].start));
+  var schedStart=nextMon(first);
+  var weeks=[];
+  for(var w=0;w<nw;w++) weeks.push(addD(schedStart,w*7));
+
+  var edf=jobs.slice().sort(function(a,b){ return pd(a.end)-pd(b.end); });
+  var priority={};
+  edf.forEach(function(j,i){ priority[j.id]=i+1; });
+
+  var res=capacityFill(jobs,weeks,cap);
+  var feasible={};
+  jobs.forEach(function(j){ feasible[j.id]=res.rem[j.id]<=0.01; });
+
+  var wkA={};
+  weeks.forEach(function(ws){
+    wkA[ws.getTime()]=jobs.reduce(function(s,j){ return s+(res.alloc[j.id+'|'+ws.getTime()]||0); },0);
+  });
+
+  R={jobs:jobs,edf:edf,weeks:weeks,alloc:res.alloc,feasible:feasible,
+     priority:priority,wkA:wkA,cap:cap,tc:tc,hp:hp,nw:nw,schedStart:schedStart};
+  renderUI();
+  document.getElementById('results').style.display='block';
+  document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ── render ────────────────────────────────────────────────────────────────────
+function renderUI(){
+  var nF=0,nO=0;
+  R.jobs.forEach(function(j){ if(R.feasible[j.id]) nF++; });
+  R.weeks.forEach(function(ws){ if(R.wkA[ws.getTime()]>R.cap+.01) nO++; });
+  var nN=R.jobs.length-nF;
+  document.getElementById('kpiGrid').innerHTML=
+    kpi('Total jobs',R.jobs.length,'')+kpi('Feasible',nF,nF===R.jobs.length?'good':'')+
+    kpi('Not feasible',nN,nN>0?'bad':'')+kpi('Weeks overloaded',nO,nO>0?'bad':'');
+  document.getElementById('tbl-jobs').innerHTML  = buildJobsTable();
+  document.getElementById('tbl-weeks').innerHTML = buildWeeksTable();
+  document.getElementById('tbl-alloc').innerHTML = buildAllocTable();
+}
+
+function kpi(l,v,c){ return '<div class="kpi '+c+'"><div class="kpi-l">'+l+'</div><div class="kpi-v">'+v+'</div></div>'; }
+
+function lastAllocWeek(jid){
+  var lw=null;
+  R.weeks.forEach(function(ws){ if((R.alloc[jid+'|'+ws.getTime()]||0)>0) lw=ws; });
+  return lw;
+}
+
+function buildJobsTable(){
+  var rows=R.jobs.map(function(j){
+    var f=R.feasible[j.id],dp=0;
+    if(!f){ var lw=lastAllocWeek(j.id); if(lw) dp=Math.round((addD(lw,4)-pd(j.end))/86400000); }
+    return '<tr><td><b>'+j.id+'</b></td><td>'+j.name+'</td><td>'+j.hrs+'</td>'+
+      '<td>'+fmt(pd(j.start))+'</td><td>'+fmt(pd(j.end))+'</td>'+
+      '<td><span class="badge '+(f?'ok':'bad')+'">'+(f?'Possible':'Not possible')+'</span></td>'+
+      '<td>'+(dp>0?dp+' days':'—')+'</td><td>'+R.priority[j.id]+'</td></tr>';
+  }).join('');
+  return '<table><thead><tr><th>Job ID</th><th>Description</th><th>Hours</th><th>Start</th><th>End</th><th>Status</th><th>Days to push</th><th>Priority</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function buildWeeksTable(){
+  var rows=R.weeks.map(function(ws){
+    var a=Math.round((R.wkA[ws.getTime()]||0)*10)/10;
+    var rem=Math.round((R.cap-a)*10)/10,over=a>R.cap+.01;
+    var pct=Math.min(Math.round(a/R.cap*100),100);
+    return '<tr><td>'+fmt(ws)+'</td><td>'+fmt(addD(ws,4))+'</td><td>'+R.cap+'</td>'+
+      '<td>'+a+'</td><td>'+rem+'</td>'+
+      '<td><span class="badge '+(over?'bad':'ok')+'">'+(over?'Overloaded':'OK')+'</span></td>'+
+      '<td><span class="bw"><span class="bar'+(over?' over':'')+'" style="width:'+pct+'%"></span></span> '+pct+'%</td></tr>';
+  }).join('');
+  return '<table><thead><tr><th>Week start</th><th>Week end</th><th>Capacity</th><th>Assigned</th><th>Remaining</th><th>Status</th><th>Utilization</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function buildAllocTable(){
+  var rows=[];
+  R.weeks.forEach(function(ws){
+    R.edf.forEach(function(j){
+      var h=R.alloc[j.id+'|'+ws.getTime()]||0;
+      if(h>0) rows.push('<tr><td><b>'+j.id+'</b></td><td>'+fmt(ws)+'</td><td>'+Math.round(h*10)/10+'</td><td>'+R.priority[j.id]+'</td></tr>');
+    });
+  });
+  return '<table><thead><tr><th>Job ID</th><th>Week start</th><th>Hours assigned</th><th>Priority</th></tr></thead><tbody>'+rows.join('')+'</tbody></table>';
+}
+
+// ── excel ─────────────────────────────────────────────────────────────────────
+function downloadExcel(){
+  if(!R) return;
+  var wb=XLSX.utils.book_new();
+  var label=current.shop+' — Crew '+current.crew;
+  var nF=0,nO=0;
+  R.jobs.forEach(function(j){ if(R.feasible[j.id]) nF++; });
+  R.weeks.forEach(function(ws){ if(R.wkA[ws.getTime()]>R.cap+.01) nO++; });
+
+  var dashRows=[
+    ['CAPACITY PLANNER — '+label.toUpperCase()],[],
+    ['Shop',current.shop],['Crew',current.crew],[],
+    ['Setting','Value'],
+    ['Technicians',R.tc],['Hours / Tech / Week',R.hp],['Weekly Capacity',R.tc*R.hp],[],
+    ['KPI','Value'],
+    ['Total Jobs',R.jobs.length],['Feasible',nF],['Not Feasible',R.jobs.length-nF],['Weeks Overloaded',nO],
+    ['Overall Status',nF===R.jobs.length?'ALL JOBS FEASIBLE':'ACTION REQUIRED'],
+  ];
+  var dws=XLSX.utils.aoa_to_sheet(dashRows);
+  dws['!cols']=[{wch:28},{wch:22}];
+  XLSX.utils.book_append_sheet(wb,dws,'Dashboard');
+
+  var jobRows=[['Job ID','Job Name','Labor Hours','Start Date','Target Completion','Feasible?','Days to Push','Priority']];
+  R.jobs.forEach(function(j){
+    var f=R.feasible[j.id],dp=0;
+    if(!f){ var lw=lastAllocWeek(j.id); if(lw) dp=Math.round((addD(lw,4)-pd(j.end))/86400000); }
+    jobRows.push([j.id,j.name,j.hrs,fmt(pd(j.start)),fmt(pd(j.end)),f?'POSSIBLE':'NOT POSSIBLE',dp,R.priority[j.id]]);
+  });
+  var jws=XLSX.utils.aoa_to_sheet(jobRows);
+  jws['!cols']=[{wch:10},{wch:22},{wch:13},{wch:16},{wch:18},{wch:14},{wch:13},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,jws,'Jobs');
+
+  var wkRows=[['Week Start','Week End','Capacity','Assigned','Remaining','Status','Utilization %']];
+  R.weeks.forEach(function(ws){
+    var a=Math.round((R.wkA[ws.getTime()]||0)*10)/10;
+    var rem=Math.round((R.cap-a)*10)/10,over=a>R.cap+.01;
+    wkRows.push([fmt(ws),fmt(addD(ws,4)),R.cap,a,rem,over?'OVERLOADED':'OK',Math.min(Math.round(a/R.cap*100),100)]);
+  });
+  var wws=XLSX.utils.aoa_to_sheet(wkRows);
+  wws['!cols']=[{wch:16},{wch:16},{wch:12},{wch:12},{wch:12},{wch:13},{wch:13}];
+  XLSX.utils.book_append_sheet(wb,wws,'Weeks');
+
+  var alRows=[['Job ID','Week Start','Hours Assigned','Priority']];
+  R.weeks.forEach(function(ws){
+    R.edf.forEach(function(j){
+      var h=R.alloc[j.id+'|'+ws.getTime()]||0;
+      if(h>0) alRows.push([j.id,fmt(ws),Math.round(h*10)/10,R.priority[j.id]]);
+    });
+  });
+  var aws=XLSX.utils.aoa_to_sheet(alRows);
+  aws['!cols']=[{wch:10},{wch:16},{wch:15},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,aws,'Allocation');
+
+  var fname=current.shop+'_Crew'+current.crew+'_Schedule.xlsx';
+  XLSX.writeFile(wb,fname);
+}
+
+// ── init ──────────────────────────────────────────────────────────────────────
+buildNav();
+var initState=loadPlan(current.shop,current.crew)||{tc:5,hp:40,nw:12,jobs:[]};
+loadIntoUI(initState);
+document.getElementById('pageTitle').textContent=current.shop+' — Crew '+current.crew;
+document.getElementById('xlHint').textContent='Downloads schedule for '+current.shop+' / Crew '+current.crew;
+updateDots();
+</script>
+
+
+</body></html>
