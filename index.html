@@ -300,6 +300,9 @@ function switchPlan(shop, crew) {
   document.getElementById('errMsg').textContent='';
   R=null;
   renderTimeline(shop);
+  // auto-run schedule if this crew has valid jobs saved
+  var hasJobs = (state.jobs||[]).some(function(j){ return j.id && j.start && j.end && j.hrs>0; });
+  if(hasJobs) runSchedule();
 }
 
 function updateDots() {
@@ -474,7 +477,7 @@ function renderUI(){
   var nN=R.jobs.length-nF;
   document.getElementById('kpiGrid').innerHTML=
     kpi('Total jobs',R.jobs.length,'')+kpi('Feasible',nF,nF===R.jobs.length?'good':'')+
-    kpi('Not feasible',nN,nN>0?'bad':'')+kpi('Weeks scheduled',R.weeks.length,'');
+    kpi('Not feasible',nN,nN>0?'bad':'')+kpi('Weeks scheduled',R.weeks.filter(function(ws){return R.wkA[ws.getTime()]>0.01;}).length,'');
   document.getElementById('tbl-jobs').innerHTML  = buildJobsTable();
   document.getElementById('tbl-weeks').innerHTML = buildWeeksTable();
   document.getElementById('tbl-alloc').innerHTML = buildAllocTable();
@@ -537,7 +540,7 @@ function downloadExcel(){
     ['Setting','Value'],
     ['Technicians',R.tc],['Hours / Tech / Week',R.hp],['Weekly Capacity',R.tc*R.hp],[],
     ['KPI','Value'],
-    ['Total Jobs',R.jobs.length],['Feasible',nF],['Not Feasible',R.jobs.length-nF],['Weeks Scheduled',R.weeks.length],
+    ['Total Jobs',R.jobs.length],['Feasible',nF],['Not Feasible',R.jobs.length-nF],['Weeks Scheduled',R.weeks.filter(function(ws){return R.wkA[ws.getTime()]>0.01;}).length],
     ['Overall Status',nF===R.jobs.length?'ALL JOBS FEASIBLE':'ACTION REQUIRED'],
   ];
   var dws=XLSX.utils.aoa_to_sheet(dashRows);
