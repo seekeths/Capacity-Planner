@@ -62,7 +62,7 @@
   /* cards */
   .card{background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1rem;}
   .slabel{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-bottom:12px;}
-  .sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .sgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
   .field{display:flex;flex-direction:column;gap:5px;}
   .field label{font-size:12px;color:var(--text2);font-weight:500;}
   .field input{height:36px;padding:0 10px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg2);color:var(--text);font-size:13px;font-family:var(--font);outline:none;transition:border-color .15s,box-shadow .15s;}
@@ -148,7 +148,6 @@
     <div class="sgrid">
       <div class="field"><label>Technicians</label><input type="number" id="techCount" value="5" min="1" oninput="saveNow()"></div>
       <div class="field"><label>Hours / technician / week</label><input type="number" id="hrsPerWeek" value="40" min="1" oninput="saveNow()"></div>
-      <div class="field"><label>Weeks to plan</label><input type="number" id="numWeeks" value="12" min="1" oninput="saveNow()"></div>
     </div>
   </div>
 
@@ -221,7 +220,6 @@ function currentState() {
   return {
     tc:   parseInt(document.getElementById('techCount').value)||5,
     hp:   parseInt(document.getElementById('hrsPerWeek').value)||40,
-    nw:   parseInt(document.getElementById('numWeeks').value)||12,
     jobs: getJobs()
   };
 }
@@ -278,7 +276,7 @@ function switchPlan(shop, crew) {
   document.getElementById('pageTitle').textContent = shop+' — Crew '+crew;
   document.getElementById('xlHint').textContent = 'Downloads schedule for '+shop+' / Crew '+crew;
 
-  var state = loadPlan(shop,crew) || {tc:5,hp:40,nw:12,jobs:[]};
+  var state = loadPlan(shop,crew) || {tc:5,hp:40,jobs:[]};
   loadIntoUI(state);
   document.getElementById('results').style.display='none';
   document.getElementById('errMsg').textContent='';
@@ -307,8 +305,8 @@ function showReset() {
 function hideReset(){ document.getElementById('overlay').classList.remove('show'); }
 function doReset(){
   hideReset();
-  savePlan(current.shop,current.crew,{tc:5,hp:40,nw:12,jobs:[]});
-  loadIntoUI({tc:5,hp:40,nw:12,jobs:[]});
+  savePlan(current.shop,current.crew,{tc:5,hp:40,jobs:[]});
+  loadIntoUI({tc:5,hp:40,jobs:[]});
   document.getElementById('results').style.display='none';
   R=null; updateDots();
 }
@@ -350,7 +348,6 @@ function getJobs(){
 function loadIntoUI(state){
   document.getElementById('techCount').value  = state.tc||5;
   document.getElementById('hrsPerWeek').value = state.hp||40;
-  document.getElementById('numWeeks').value   = state.nw||12;
   document.getElementById('jobsList').innerHTML='';
   uid=0;
   (state.jobs||[]).forEach(function(j){ addJob(j,true); });
@@ -405,7 +402,6 @@ function runSchedule(){
   setErr();
   var tc=parseInt(document.getElementById('techCount').value);
   var hp=parseInt(document.getElementById('hrsPerWeek').value);
-  var nw=parseInt(document.getElementById('numWeeks').value);
   var cap=tc*hp, jobs=getJobs();
 
   if(!jobs.length)             return setErr('Add at least one job.');
@@ -419,7 +415,11 @@ function runSchedule(){
   }
 
   var first=jobs.reduce(function(m,j){ return pd(j.start)<m?pd(j.start):m; },pd(jobs[0].start));
+  var last=jobs.reduce(function(m,j){ return pd(j.end)>m?pd(j.end):m; },pd(jobs[0].end));
   var schedStart=nextMon(first);
+  // auto-calc weeks needed to cover all jobs + 3 buffer weeks
+  var msPerWeek=7*24*60*60*1000;
+  var nw=Math.ceil((last-schedStart)/msPerWeek)+3;
   var weeks=[];
   for(var w=0;w<nw;w++) weeks.push(addD(schedStart,w*7));
 
@@ -437,7 +437,7 @@ function runSchedule(){
   });
 
   R={jobs:jobs,edf:edf,weeks:weeks,alloc:res.alloc,feasible:feasible,
-     priority:priority,wkA:wkA,cap:cap,tc:tc,hp:hp,nw:nw,schedStart:schedStart};
+     priority:priority,wkA:wkA,cap:cap,tc:tc,hp:hp,schedStart:schedStart};
   renderUI();
   document.getElementById('results').style.display='block';
   document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
@@ -451,7 +451,7 @@ function renderUI(){
   var nN=R.jobs.length-nF;
   document.getElementById('kpiGrid').innerHTML=
     kpi('Total jobs',R.jobs.length,'')+kpi('Feasible',nF,nF===R.jobs.length?'good':'')+
-    kpi('Not feasible',nN,nN>0?'bad':'')+kpi('Weeks fully utilized',nO,nO>0?'good':'');
+    kpi('Not feasible',nN,nN>0?'bad':'')+kpi('Weeks scheduled',R.weeks.length,'');
   document.getElementById('tbl-jobs').innerHTML  = buildJobsTable();
   document.getElementById('tbl-weeks').innerHTML = buildWeeksTable();
   document.getElementById('tbl-alloc').innerHTML = buildAllocTable();
@@ -508,15 +508,13 @@ function downloadExcel(){
   var label=current.shop+' — Crew '+current.crew;
   var nF=0,nO=0;
   R.jobs.forEach(function(j){ if(R.feasible[j.id]) nF++; });
-  R.weeks.forEach(function(ws){ if(Math.abs(R.wkA[ws.getTime()]-R.cap)<0.1) nO++; });
-
   var dashRows=[
     ['CAPACITY PLANNER — '+label.toUpperCase()],[],
     ['Shop',current.shop],['Crew',current.crew],[],
     ['Setting','Value'],
     ['Technicians',R.tc],['Hours / Tech / Week',R.hp],['Weekly Capacity',R.tc*R.hp],[],
     ['KPI','Value'],
-    ['Total Jobs',R.jobs.length],['Feasible',nF],['Not Feasible',R.jobs.length-nF],['Weeks Fully Utilized',nO],
+    ['Total Jobs',R.jobs.length],['Feasible',nF],['Not Feasible',R.jobs.length-nF],['Weeks Scheduled',R.weeks.length],
     ['Overall Status',nF===R.jobs.length?'ALL JOBS FEASIBLE':'ACTION REQUIRED'],
   ];
   var dws=XLSX.utils.aoa_to_sheet(dashRows);
@@ -560,7 +558,7 @@ function downloadExcel(){
 
 // ── init ──────────────────────────────────────────────────────────────────────
 buildNav();
-var initState=loadPlan(current.shop,current.crew)||{tc:5,hp:40,nw:12,jobs:[]};
+var initState=loadPlan(current.shop,current.crew)||{tc:5,hp:40,jobs:[]};
 loadIntoUI(initState);
 document.getElementById('pageTitle').textContent=current.shop+' — Crew '+current.crew;
 document.getElementById('xlHint').textContent='Downloads schedule for '+current.shop+' / Crew '+current.crew;
