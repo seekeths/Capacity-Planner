@@ -294,7 +294,6 @@ function switchPlan(shop, crew) {
   });
 
   document.getElementById('pageTitle').textContent = shop+' — Crew '+crew;
-  document.getElementById('xlHint').textContent = 'Downloads all 3 crews for '+shop;
 
   var state = loadPlan(shop,crew) || {tc:5,hp:40,jobs:[]};
   loadIntoUI(state);
@@ -798,7 +797,6 @@ buildNav();
 var initState=loadPlan(current.shop,current.crew)||{tc:5,hp:40,jobs:[]};
 loadIntoUI(initState);
 document.getElementById('pageTitle').textContent=current.shop+' — Crew '+current.crew;
-document.getElementById('xlHint').textContent='Downloads schedule for '+current.shop+' / Crew '+current.crew;
 updateDots();
 </script>
 </body>
