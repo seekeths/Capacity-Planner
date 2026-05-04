@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Capacity Planner</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -69,8 +68,12 @@
   .field input:focus{border-color:var(--border3);background:var(--bg);box-shadow:0 0 0 3px rgba(0,0,0,.06);}
 
   /* jobs */
-  .jhdr{display:grid;grid-template-columns:90px 1fr 90px 130px 130px 36px;gap:8px;padding:0 8px 8px;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;}
-  .jrow{display:grid;grid-template-columns:90px 1fr 90px 130px 130px 36px;gap:8px;align-items:center;padding:8px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);margin-bottom:6px;transition:border-color .15s;}
+  .jhdr{display:grid;grid-template-columns:90px 1fr 90px 130px 130px 60px 36px 36px;gap:8px;padding:0 8px 8px;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;}
+  .jrow{display:grid;grid-template-columns:90px 1fr 90px 130px 130px 60px 36px 36px;gap:8px;align-items:center;padding:8px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);margin-bottom:6px;transition:border-color .15s,opacity .15s;}
+  .jrow.ignored{opacity:0.4;}
+  .bignore{width:30px;height:30px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s;font-family:var(--font);}
+  .bignore:hover{background:var(--bg3);}
+  .bignore.active{background:var(--red-bg);color:var(--red-text);border-color:var(--red-text);}
   .jrow:hover{border-color:var(--border2);}
   .jrow input{height:30px;padding:0 8px;border:0.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px;font-family:var(--font);width:100%;outline:none;transition:border-color .15s;}
   .jrow input:focus{border-color:var(--border3);}
@@ -112,8 +115,7 @@
   .bw{width:80px;background:var(--bg3);border-radius:4px;height:6px;display:inline-block;vertical-align:middle;overflow:hidden;}
   .bar{height:100%;border-radius:4px;background:var(--blue);}
   .bar.over{background:var(--red-text);}
-  .xrow{display:flex;align-items:center;gap:12px;padding-top:1rem;border-top:0.5px solid var(--border);margin-top:1.25rem;flex-wrap:wrap;}
-  .xrow .hint{font-size:12px;color:var(--text3);}
+
   #results{display:none;}
 
   /* timeline */
@@ -167,7 +169,7 @@
     <p class="slabel">Jobs</p>
     <div class="jhdr">
       <span>Job ID</span><span>Description</span><span>Hours</span>
-      <span>Start date</span><span>End date</span><span></span>
+      <span>Start date</span><span>End date</span><span title="Pin specific techs to this job">Pinned Techs</span><span></span><span></span>
     </div>
     <div id="jobsList"></div>
     <div class="actions">
@@ -190,10 +192,7 @@
       <div id="pane-jobs"  class="pane active"><div class="tw" id="tbl-jobs"></div></div>
       <div id="pane-weeks" class="pane"><div class="tw" id="tbl-weeks"></div></div>
       <div id="pane-alloc" class="pane"><div class="tw" id="tbl-alloc"></div></div>
-      <div class="xrow">
-        <button class="bp" onclick="downloadExcel()">Download Excel</button>
-        <span class="hint" id="xlHint"></span>
-      </div>
+
     </div>
   </div>
 </div>
@@ -341,15 +340,19 @@ function addJob(d,skipSave){
   d=d||{}; var u=++uid;
   var row=document.createElement('div');
   row.className='jrow'; row.dataset.u=u;
+  var ignored = d.ignored || false;
   row.innerHTML=
     '<input class="jid"   type="text"   placeholder="J00'+u+'" value="'+(d.id||'')+'">' +
     '<input class="jname" type="text"   placeholder="Description" value="'+(d.name||'')+'">' +
     '<input class="jhrs"  type="number" placeholder="0" min="1" value="'+(d.hrs||'')+'">' +
     '<input class="jsd"   type="date"   value="'+(d.start||'')+'">' +
     '<input class="jed"   type="date"   value="'+(d.end||'')+'">' +
+    '<input class="jpin"  type="number" placeholder="—" min="1" title="Pin techs to this job" value="'+(d.pinned||'')+'">' +
+    '<button class="bignore'+(ignored?' active':'')+'" title="Ignore this job" onclick="toggleIgnore(this)">'+(ignored?'🚫':'○')+'</button>' +
     '<button class="bdel" onclick="removeJob(this)">✕</button>';
+  if (ignored) row.classList.add('ignored');
   row.querySelectorAll('input').forEach(function(inp){
-    inp.addEventListener('input', saveNow);
+    inp.addEventListener('input',  saveNow);
     inp.addEventListener('change', saveNow);
   });
   document.getElementById('jobsList').appendChild(row);
@@ -358,14 +361,26 @@ function addJob(d,skipSave){
 
 function removeJob(btn){ btn.closest('.jrow').remove(); saveNow(); }
 
+function toggleIgnore(btn){
+  var row = btn.closest('.jrow');
+  var nowIgnored = !row.classList.contains('ignored');
+  row.classList.toggle('ignored', nowIgnored);
+  btn.classList.toggle('active', nowIgnored);
+  btn.textContent = nowIgnored ? '🚫' : '○';
+  saveNow();
+}
+
 function getJobs(){
   return Array.from(document.querySelectorAll('.jrow')).map(function(r){
+    var pinVal = r.querySelector('.jpin').value.trim();
     return {
-      id:    r.querySelector('.jid').value.trim(),
-      name:  r.querySelector('.jname').value.trim(),
-      hrs:   parseFloat(r.querySelector('.jhrs').value)||0,
-      start: r.querySelector('.jsd').value,
-      end:   r.querySelector('.jed').value,
+      id:      r.querySelector('.jid').value.trim(),
+      name:    r.querySelector('.jname').value.trim(),
+      hrs:     parseFloat(r.querySelector('.jhrs').value)||0,
+      start:   r.querySelector('.jsd').value,
+      end:     r.querySelector('.jed').value,
+      pinned:  pinVal ? parseInt(pinVal) : null,
+      ignored: r.classList.contains('ignored'),
     };
   });
 }
@@ -406,15 +421,39 @@ function networkdays(start,end){
   return count;
 }
 
-function capacityFill(jobs,weeks,cap){
-  var edf=jobs.slice().sort(function(a,b){ return pd(a.end)-pd(b.end); });
+function capacityFill(jobs, weeks, cap, hp){
+  // hp = hours per technician per week (used to size pinned capacity)
+  hp = hp || 40;
+  var pinnedJobs = jobs.filter(function(j){ return j.pinned && j.pinned > 0; });
+  var normalJobs = jobs.filter(function(j){ return !j.pinned || j.pinned <= 0; });
+  var edf = normalJobs.slice().sort(function(a,b){ return pd(a.end)-pd(b.end); });
+
   var rem={};
   jobs.forEach(function(j){ rem[j.id]=j.hrs; });
   var alloc={};
+
   weeks.forEach(function(ws){
-    var we=addD(ws,4),left=cap;
+    var we=addD(ws,4), left=cap;
+
+    // First pass: pinned jobs get capacity from their dedicated techs
+    pinnedJobs.forEach(function(j){
+      var key=j.id+'|'+ws.getTime(), sd=pd(j.start), ed=pd(j.end);
+      if(ws>ed||we<sd||rem[j.id]<=0){ alloc[key]=0; return; }
+      var os=sd>ws?sd:ws, oe=ed<we?ed:we;
+      var dtw=networkdays(os,oe), dr=networkdays(os,ed);
+      // Pinned tech capacity: pinned techs * hrs/tech/day * workdays active this week
+      var hrsPerTechPerDay = hp / 5;
+      var pinnedWeekCap = j.pinned * hrsPerTechPerDay * dtw;
+      var max = dr>0 ? rem[j.id]*(dtw/dr) : rem[j.id];
+      var assign = Math.min(pinnedWeekCap, max, rem[j.id]);
+      alloc[key]=assign; rem[j.id]-=assign; left-=assign;
+    });
+
+    left = Math.max(left, 0);
+
+    // Second pass: remaining capacity shared by normal EDF jobs
     edf.forEach(function(j){
-      var key=j.id+'|'+ws.getTime(),sd=pd(j.start),ed=pd(j.end);
+      var key=j.id+'|'+ws.getTime(), sd=pd(j.start), ed=pd(j.end);
       if(ws>ed||we<sd||rem[j.id]<=0){ alloc[key]=0; return; }
       var os=sd>ws?sd:ws, oe=ed<we?ed:we;
       var dtw=networkdays(os,oe), dr=networkdays(os,ed);
@@ -433,6 +472,7 @@ function runSchedule(){
   var cap=tc*hp, jobs=getJobs();
 
   if(!jobs.length)             return setErr('Add at least one job.');
+  // validate all jobs (including ignored) for data integrity
   for(var i=0;i<jobs.length;i++){
     var j=jobs[i];
     if(!j.id)                  return setErr('Every job needs a Job ID.');
@@ -441,6 +481,9 @@ function runSchedule(){
     if(!j.start||!j.end)       return setErr('Job '+j.id+': start and end dates required.');
     if(pd(j.start)>pd(j.end))  return setErr('Job '+j.id+': start must be before end.');
   }
+  // active jobs only (non-ignored) go to the scheduler
+  var activeJobs = jobs.filter(function(j){ return !j.ignored; });
+  if(!activeJobs.length)       return setErr('All jobs are ignored — nothing to schedule.');
 
   var first=jobs.reduce(function(m,j){ return pd(j.start)<m?pd(j.start):m; },pd(jobs[0].start));
   var last=jobs.reduce(function(m,j){ return pd(j.end)>m?pd(j.end):m; },pd(jobs[0].end));
@@ -451,20 +494,21 @@ function runSchedule(){
   var weeks=[];
   for(var w=0;w<nw;w++) weeks.push(addD(schedStart,w*7));
 
-  var edf=jobs.slice().sort(function(a,b){ return pd(a.end)-pd(b.end); });
+  var edf=activeJobs.slice().sort(function(a,b){ return pd(a.end)-pd(b.end); });
   var priority={};
   edf.forEach(function(j,i){ priority[j.id]=i+1; });
 
-  var res=capacityFill(jobs,weeks,cap);
+  var res=capacityFill(activeJobs,weeks,cap,hp);
   var feasible={};
-  jobs.forEach(function(j){ feasible[j.id]=res.rem[j.id]<=0.01; });
+  activeJobs.forEach(function(j){ feasible[j.id]=res.rem[j.id]<=0.01; });
 
   var wkA={};
   weeks.forEach(function(ws){
-    wkA[ws.getTime()]=jobs.reduce(function(s,j){ return s+(res.alloc[j.id+'|'+ws.getTime()]||0); },0);
+    wkA[ws.getTime()]=activeJobs.reduce(function(s,j){ return s+(res.alloc[j.id+'|'+ws.getTime()]||0); },0);
   });
 
-  R={jobs:jobs,edf:edf,weeks:weeks,alloc:res.alloc,feasible:feasible,
+  // R.jobs = all jobs (including ignored) for display; R.activeJobs = scheduled only
+  R={jobs:jobs,activeJobs:activeJobs,edf:edf,weeks:weeks,alloc:res.alloc,feasible:feasible,
      priority:priority,wkA:wkA,cap:cap,tc:tc,hp:hp,schedStart:schedStart};
   renderUI();
   document.getElementById('results').style.display='block';
@@ -474,13 +518,15 @@ function runSchedule(){
 
 // ── render ────────────────────────────────────────────────────────────────────
 function renderUI(){
-  var nF=0,nO=0;
-  R.jobs.forEach(function(j){ if(R.feasible[j.id]) nF++; });
-  R.weeks.forEach(function(ws){ if(Math.abs(R.wkA[ws.getTime()]-R.cap)<0.1) nO++; });
-  var nN=R.jobs.length-nF;
+  var nF=0, ignoredCount=(R.jobs.length-(R.activeJobs||R.jobs).length);
+  (R.activeJobs||R.jobs).forEach(function(j){ if(R.feasible[j.id]) nF++; });
+  var activeCount=(R.activeJobs||R.jobs).length;
+  var nN=activeCount-nF;
   document.getElementById('kpiGrid').innerHTML=
-    kpi('Total jobs',R.jobs.length,'')+kpi('Feasible',nF,nF===R.jobs.length?'good':'')+
-    kpi('Not feasible',nN,nN>0?'bad':'')+kpi('Weeks scheduled',R.weeks.filter(function(ws){return R.wkA[ws.getTime()]>0.01;}).length,'');
+    kpi('Total jobs',R.jobs.length+(ignoredCount?' ('+ignoredCount+' ignored)':''),'')+
+    kpi('Feasible',nF,nF===activeCount?'good':'')+
+    kpi('Not feasible',nN,nN>0?'bad':'')+
+    kpi('Weeks scheduled',R.weeks.filter(function(ws){return R.wkA[ws.getTime()]>0.01;}).length,'');
   document.getElementById('tbl-jobs').innerHTML  = buildJobsTable();
   document.getElementById('tbl-weeks').innerHTML = buildWeeksTable();
   document.getElementById('tbl-alloc').innerHTML = buildAllocTable();
@@ -496,12 +542,19 @@ function lastAllocWeek(jid){
 
 function buildJobsTable(){
   var rows=R.jobs.map(function(j){
+    if(j.ignored){
+      return '<tr style="opacity:0.45"><td><b>'+j.id+'</b></td><td>'+j.name+'</td><td>'+j.hrs+'</td>'+
+        '<td>'+fmt(pd(j.start))+'</td><td>'+fmt(pd(j.end))+'</td>'+
+        '<td><span class="badge" style="background:var(--bg3);color:var(--text3)">Ignored</span></td>'+
+        '<td>—</td><td>—</td></tr>';
+    }
     var f=R.feasible[j.id],dp=0;
     if(!f){ var lw=lastAllocWeek(j.id); if(lw) dp=Math.round((addD(lw,4)-pd(j.end))/86400000); }
-    return '<tr><td><b>'+j.id+'</b></td><td>'+j.name+'</td><td>'+j.hrs+'</td>'+
+    var pinLabel = j.pinned ? ' <span style="font-size:10px;color:var(--text3)">('+j.pinned+' pinned)</span>' : '';
+    return '<tr><td><b>'+j.id+'</b>'+pinLabel+'</td><td>'+j.name+'</td><td>'+j.hrs+'</td>'+
       '<td>'+fmt(pd(j.start))+'</td><td>'+fmt(pd(j.end))+'</td>'+
       '<td><span class="badge '+(f?'ok':'bad')+'">'+(f?'Possible':'Not possible')+'</span></td>'+
-      '<td>'+(dp>0?dp+' days':'—')+'</td><td>'+R.priority[j.id]+'</td></tr>';
+      '<td>'+(dp>0?dp+' days':'—')+'</td><td>'+(R.priority[j.id]||'—')+'</td></tr>';
   }).join('');
   return '<table><thead><tr><th>Job ID</th><th>Description</th><th>Hours</th><th>Start</th><th>End</th><th>Status</th><th>Days to push</th><th>Priority</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
@@ -531,123 +584,7 @@ function buildAllocTable(){
 }
 
 // ── excel ─────────────────────────────────────────────────────────────────────
-function calcCrewResult(shop, crew) {
-  var state = loadPlan(shop, crew);
-  if (!state || !state.jobs || !state.jobs.length) return null;
-  var jobs = state.jobs.filter(function(j){ return j.id && j.start && j.end && j.hrs > 0; });
-  if (!jobs.length) return null;
 
-  var tc=state.tc||5, hp=state.hp||40, cap=tc*hp;
-  var first=jobs.reduce(function(m,j){ return pd(j.start)<m?pd(j.start):m; },pd(jobs[0].start));
-  var last =jobs.reduce(function(m,j){ return pd(j.end)>m?pd(j.end):m;   },pd(jobs[0].end));
-  var schedStart=nextMon(first);
-  var nw=Math.ceil((last-schedStart)/(7*24*60*60*1000))+3;
-  var weeks=[]; for(var w=0;w<nw;w++) weeks.push(addD(schedStart,w*7));
-  var edf=jobs.slice().sort(function(a,b){ return pd(a.end)-pd(b.end); });
-  var priority={}; edf.forEach(function(j,i){ priority[j.id]=i+1; });
-  var res=capacityFill(jobs,weeks,cap);
-  var feasible={}; jobs.forEach(function(j){ feasible[j.id]=res.rem[j.id]<=0.01; });
-  var wkA={};
-  weeks.forEach(function(ws){
-    wkA[ws.getTime()]=jobs.reduce(function(s,j){ return s+(res.alloc[j.id+'|'+ws.getTime()]||0); },0);
-  });
-  return {jobs:jobs,edf:edf,weeks:weeks,alloc:res.alloc,feasible:feasible,priority:priority,wkA:wkA,cap:cap,tc:tc,hp:hp};
-}
-
-function addCrewSheets(wb, shop, crew, CR) {
-  var p='Crew '+crew+' — ';
-
-  function lastWk(jid) {
-    var lw=null;
-    CR.weeks.forEach(function(ws){ if((CR.alloc[jid+'|'+ws.getTime()]||0)>0) lw=ws; });
-    return lw;
-  }
-
-  var nF=0;
-  CR.jobs.forEach(function(j){ if(CR.feasible[j.id]) nF++; });
-  var activeWks=CR.weeks.filter(function(ws){ return CR.wkA[ws.getTime()]>0.01; }).length;
-
-  // Dashboard
-  var dws=XLSX.utils.aoa_to_sheet([
-    [shop.toUpperCase()+' — CREW '+crew],[],
-    ['Setting','Value'],
-    ['Technicians',CR.tc],['Total Weekly Hours Per Technician',CR.hp],['Weekly Capacity',CR.tc*CR.hp],[],
-    ['Schedule Summary','Value'],
-    ['Total Jobs',CR.jobs.length],['Feasible',nF],['Not Feasible',CR.jobs.length-nF],
-    ['Weeks Scheduled',activeWks],['Overall Status',nF===CR.jobs.length?'ALL JOBS FEASIBLE':'ACTION REQUIRED'],
-  ]);
-  dws['!cols']=[{wch:32},{wch:22}];
-  XLSX.utils.book_append_sheet(wb,dws,p+'Dashboard');
-
-  // Jobs
-  var jobRows=[['Job ID','Job Name','Labor Hours','Start Date','Target Completion','Feasible?','Days to Push','Priority']];
-  CR.jobs.forEach(function(j){
-    var f=CR.feasible[j.id],dp=0;
-    if(!f){ var lw=lastWk(j.id); if(lw) dp=Math.round((addD(lw,4)-pd(j.end))/86400000); }
-    jobRows.push([j.id,j.name,j.hrs,fmt(pd(j.start)),fmt(pd(j.end)),f?'POSSIBLE':'NOT POSSIBLE',dp,CR.priority[j.id]]);
-  });
-  var jws=XLSX.utils.aoa_to_sheet(jobRows);
-  jws['!cols']=[{wch:10},{wch:22},{wch:13},{wch:16},{wch:18},{wch:14},{wch:13},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,jws,p+'Jobs');
-
-  // Weeks
-  var wkRows=[['Week Start','Week End','Capacity','Assigned','Remaining','Status','Utilization %']];
-  CR.weeks.forEach(function(ws){
-    var a=Math.round((CR.wkA[ws.getTime()]||0)*10)/10;
-    var rem=Math.round((CR.cap-a)*10)/10,over=a>CR.cap+.01;
-    wkRows.push([fmt(ws),fmt(addD(ws,4)),CR.cap,a,rem,over?'OVERLOADED':'OK',Math.min(Math.round(a/CR.cap*100),100)]);
-  });
-  var wws=XLSX.utils.aoa_to_sheet(wkRows);
-  wws['!cols']=[{wch:16},{wch:16},{wch:12},{wch:12},{wch:12},{wch:13},{wch:13}];
-  XLSX.utils.book_append_sheet(wb,wws,p+'Weeks');
-
-  // Allocation
-  var alRows=[['Job ID','Week Start','Hours Assigned','Priority']];
-  CR.weeks.forEach(function(ws){
-    CR.edf.forEach(function(j){
-      var h=CR.alloc[j.id+'|'+ws.getTime()]||0;
-      if(h>0) alRows.push([j.id,fmt(ws),Math.round(h*10)/10,CR.priority[j.id]]);
-    });
-  });
-  var aws=XLSX.utils.aoa_to_sheet(alRows);
-  aws['!cols']=[{wch:10},{wch:16},{wch:15},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,aws,p+'Allocation');
-}
-
-function downloadExcel(){
-  var wb = XLSX.utils.book_new();
-  var shop = current.shop;
-  var hasAny = false;
-
-  var summaryRows = [
-    [shop.toUpperCase()+' — ALL CREWS SUMMARY'],[],
-    ['Crew','Total Jobs','Feasible','Not Feasible','Weeks Scheduled','Status']
-  ];
-
-  CREWS.forEach(function(crew){
-    var cr = calcCrewResult(shop, crew);
-    if (cr) {
-      hasAny = true;
-      addCrewSheets(wb, shop, crew, cr);
-      var nF=0;
-      cr.jobs.forEach(function(j){ if(cr.feasible[j.id]) nF++; });
-      var activeWks = cr.weeks.filter(function(ws){ return cr.wkA[ws.getTime()]>0.01; }).length;
-      summaryRows.push(['Crew '+crew, cr.jobs.length, nF, cr.jobs.length-nF, activeWks,
-        nF===cr.jobs.length?'ALL JOBS FEASIBLE':'ACTION REQUIRED']);
-    } else {
-      summaryRows.push(['Crew '+crew,'--','--','--','--','No jobs entered']);
-    }
-  });
-
-  if (!hasAny) { alert('No jobs entered for '+shop+' yet.'); return; }
-
-  var sumWs = XLSX.utils.aoa_to_sheet(summaryRows);
-  sumWs['!cols'] = [{wch:12},{wch:12},{wch:10},{wch:14},{wch:16},{wch:22}];
-  wb.SheetNames.unshift('Summary');
-  wb.Sheets['Summary'] = sumWs;
-
-  XLSX.writeFile(wb, shop+'_AllCrews_Schedule.xlsx');
-}
 
 // ── timeline ─────────────────────────────────────────────────────────────────
 // roundRect polyfill for older browsers
