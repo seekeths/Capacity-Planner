@@ -118,7 +118,11 @@
 
   /* timeline */
   .timeline-card{background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1rem;}
-  .timeline-scroll{overflow-x:auto;padding-bottom:4px;}
+  .timeline-scroll{overflow-x:auto;overflow-y:hidden;padding-bottom:8px;max-width:100%;}
+  .timeline-scroll::-webkit-scrollbar{height:6px;}
+  .timeline-scroll::-webkit-scrollbar-track{background:var(--bg3);border-radius:3px;}
+  .timeline-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+  .timeline-scroll::-webkit-scrollbar-thumb:hover{background:var(--text3);}
   .tl-legend{display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;}
   .tl-legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);}
   .tl-legend-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0;}
@@ -155,7 +159,7 @@
     <p class="slabel">Settings</p>
     <div class="sgrid">
       <div class="field"><label>Technicians</label><input type="number" id="techCount" value="5" min="1" oninput="saveNow()"></div>
-      <div class="field"><label>Hours / technician / week</label><input type="number" id="hrsPerWeek" value="40" min="1" oninput="saveNow()"></div>
+      <div class="field"><label>Total Weekly Hours Per Technician</label><input type="number" id="hrsPerWeek" value="40" min="1" oninput="saveNow()"></div>
     </div>
   </div>
 
@@ -292,7 +296,7 @@ function switchPlan(shop, crew) {
   });
 
   document.getElementById('pageTitle').textContent = shop+' — Crew '+crew;
-  document.getElementById('xlHint').textContent = 'Downloads schedule for '+shop+' / Crew '+crew;
+  document.getElementById('xlHint').textContent = 'Downloads all 3 crews for '+shop;
 
   var state = loadPlan(shop,crew) || {tc:5,hp:40,jobs:[]};
   loadIntoUI(state);
@@ -528,58 +532,122 @@ function buildAllocTable(){
 }
 
 // ── excel ─────────────────────────────────────────────────────────────────────
-function downloadExcel(){
-  if(!R) return;
-  var wb=XLSX.utils.book_new();
-  var label=current.shop+' — Crew '+current.crew;
-  var nF=0,nO=0;
-  R.jobs.forEach(function(j){ if(R.feasible[j.id]) nF++; });
-  var dashRows=[
-    ['CAPACITY PLANNER — '+label.toUpperCase()],[],
-    ['Shop',current.shop],['Crew',current.crew],[],
-    ['Setting','Value'],
-    ['Technicians',R.tc],['Hours / Tech / Week',R.hp],['Weekly Capacity',R.tc*R.hp],[],
-    ['KPI','Value'],
-    ['Total Jobs',R.jobs.length],['Feasible',nF],['Not Feasible',R.jobs.length-nF],['Weeks Scheduled',R.weeks.filter(function(ws){return R.wkA[ws.getTime()]>0.01;}).length],
-    ['Overall Status',nF===R.jobs.length?'ALL JOBS FEASIBLE':'ACTION REQUIRED'],
-  ];
-  var dws=XLSX.utils.aoa_to_sheet(dashRows);
-  dws['!cols']=[{wch:28},{wch:22}];
-  XLSX.utils.book_append_sheet(wb,dws,'Dashboard');
+function calcCrewResult(shop, crew) {
+  var state = loadPlan(shop, crew);
+  if (!state || !state.jobs || !state.jobs.length) return null;
+  var jobs = state.jobs.filter(function(j){ return j.id && j.start && j.end && j.hrs > 0; });
+  if (!jobs.length) return null;
 
+  var tc=state.tc||5, hp=state.hp||40, cap=tc*hp;
+  var first=jobs.reduce(function(m,j){ return pd(j.start)<m?pd(j.start):m; },pd(jobs[0].start));
+  var last =jobs.reduce(function(m,j){ return pd(j.end)>m?pd(j.end):m;   },pd(jobs[0].end));
+  var schedStart=nextMon(first);
+  var nw=Math.ceil((last-schedStart)/(7*24*60*60*1000))+3;
+  var weeks=[]; for(var w=0;w<nw;w++) weeks.push(addD(schedStart,w*7));
+  var edf=jobs.slice().sort(function(a,b){ return pd(a.end)-pd(b.end); });
+  var priority={}; edf.forEach(function(j,i){ priority[j.id]=i+1; });
+  var res=capacityFill(jobs,weeks,cap);
+  var feasible={}; jobs.forEach(function(j){ feasible[j.id]=res.rem[j.id]<=0.01; });
+  var wkA={};
+  weeks.forEach(function(ws){
+    wkA[ws.getTime()]=jobs.reduce(function(s,j){ return s+(res.alloc[j.id+'|'+ws.getTime()]||0); },0);
+  });
+  return {jobs:jobs,edf:edf,weeks:weeks,alloc:res.alloc,feasible:feasible,priority:priority,wkA:wkA,cap:cap,tc:tc,hp:hp};
+}
+
+function addCrewSheets(wb, shop, crew, CR) {
+  var p='Crew '+crew+' — ';
+
+  function lastWk(jid) {
+    var lw=null;
+    CR.weeks.forEach(function(ws){ if((CR.alloc[jid+'|'+ws.getTime()]||0)>0) lw=ws; });
+    return lw;
+  }
+
+  var nF=0;
+  CR.jobs.forEach(function(j){ if(CR.feasible[j.id]) nF++; });
+  var activeWks=CR.weeks.filter(function(ws){ return CR.wkA[ws.getTime()]>0.01; }).length;
+
+  // Dashboard
+  var dws=XLSX.utils.aoa_to_sheet([
+    [shop.toUpperCase()+' — CREW '+crew],[],
+    ['Setting','Value'],
+    ['Technicians',CR.tc],['Total Weekly Hours Per Technician',CR.hp],['Weekly Capacity',CR.tc*CR.hp],[],
+    ['Schedule Summary','Value'],
+    ['Total Jobs',CR.jobs.length],['Feasible',nF],['Not Feasible',CR.jobs.length-nF],
+    ['Weeks Scheduled',activeWks],['Overall Status',nF===CR.jobs.length?'ALL JOBS FEASIBLE':'ACTION REQUIRED'],
+  ]);
+  dws['!cols']=[{wch:32},{wch:22}];
+  XLSX.utils.book_append_sheet(wb,dws,p+'Dashboard');
+
+  // Jobs
   var jobRows=[['Job ID','Job Name','Labor Hours','Start Date','Target Completion','Feasible?','Days to Push','Priority']];
-  R.jobs.forEach(function(j){
-    var f=R.feasible[j.id],dp=0;
-    if(!f){ var lw=lastAllocWeek(j.id); if(lw) dp=Math.round((addD(lw,4)-pd(j.end))/86400000); }
-    jobRows.push([j.id,j.name,j.hrs,fmt(pd(j.start)),fmt(pd(j.end)),f?'POSSIBLE':'NOT POSSIBLE',dp,R.priority[j.id]]);
+  CR.jobs.forEach(function(j){
+    var f=CR.feasible[j.id],dp=0;
+    if(!f){ var lw=lastWk(j.id); if(lw) dp=Math.round((addD(lw,4)-pd(j.end))/86400000); }
+    jobRows.push([j.id,j.name,j.hrs,fmt(pd(j.start)),fmt(pd(j.end)),f?'POSSIBLE':'NOT POSSIBLE',dp,CR.priority[j.id]]);
   });
   var jws=XLSX.utils.aoa_to_sheet(jobRows);
   jws['!cols']=[{wch:10},{wch:22},{wch:13},{wch:16},{wch:18},{wch:14},{wch:13},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,jws,'Jobs');
+  XLSX.utils.book_append_sheet(wb,jws,p+'Jobs');
 
+  // Weeks
   var wkRows=[['Week Start','Week End','Capacity','Assigned','Remaining','Status','Utilization %']];
-  R.weeks.forEach(function(ws){
-    var a=Math.round((R.wkA[ws.getTime()]||0)*10)/10;
-    var rem=Math.round((R.cap-a)*10)/10,over=a>R.cap+.01;
-    wkRows.push([fmt(ws),fmt(addD(ws,4)),R.cap,a,rem,over?'OVERLOADED':'OK',Math.min(Math.round(a/R.cap*100),100)]);
+  CR.weeks.forEach(function(ws){
+    var a=Math.round((CR.wkA[ws.getTime()]||0)*10)/10;
+    var rem=Math.round((CR.cap-a)*10)/10,over=a>CR.cap+.01;
+    wkRows.push([fmt(ws),fmt(addD(ws,4)),CR.cap,a,rem,over?'OVERLOADED':'OK',Math.min(Math.round(a/CR.cap*100),100)]);
   });
   var wws=XLSX.utils.aoa_to_sheet(wkRows);
   wws['!cols']=[{wch:16},{wch:16},{wch:12},{wch:12},{wch:12},{wch:13},{wch:13}];
-  XLSX.utils.book_append_sheet(wb,wws,'Weeks');
+  XLSX.utils.book_append_sheet(wb,wws,p+'Weeks');
 
+  // Allocation
   var alRows=[['Job ID','Week Start','Hours Assigned','Priority']];
-  R.weeks.forEach(function(ws){
-    R.edf.forEach(function(j){
-      var h=R.alloc[j.id+'|'+ws.getTime()]||0;
-      if(h>0) alRows.push([j.id,fmt(ws),Math.round(h*10)/10,R.priority[j.id]]);
+  CR.weeks.forEach(function(ws){
+    CR.edf.forEach(function(j){
+      var h=CR.alloc[j.id+'|'+ws.getTime()]||0;
+      if(h>0) alRows.push([j.id,fmt(ws),Math.round(h*10)/10,CR.priority[j.id]]);
     });
   });
   var aws=XLSX.utils.aoa_to_sheet(alRows);
   aws['!cols']=[{wch:10},{wch:16},{wch:15},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,aws,'Allocation');
+  XLSX.utils.book_append_sheet(wb,aws,p+'Allocation');
+}
 
-  var fname=current.shop+'_Crew'+current.crew+'_Schedule.xlsx';
-  XLSX.writeFile(wb,fname);
+function downloadExcel(){
+  var wb = XLSX.utils.book_new();
+  var shop = current.shop;
+  var hasAny = false;
+
+  var summaryRows = [
+    [shop.toUpperCase()+' — ALL CREWS SUMMARY'],[],
+    ['Crew','Total Jobs','Feasible','Not Feasible','Weeks Scheduled','Status']
+  ];
+
+  CREWS.forEach(function(crew){
+    var cr = calcCrewResult(shop, crew);
+    if (cr) {
+      hasAny = true;
+      addCrewSheets(wb, shop, crew, cr);
+      var nF=0;
+      cr.jobs.forEach(function(j){ if(cr.feasible[j.id]) nF++; });
+      var activeWks = cr.weeks.filter(function(ws){ return cr.wkA[ws.getTime()]>0.01; }).length;
+      summaryRows.push(['Crew '+crew, cr.jobs.length, nF, cr.jobs.length-nF, activeWks,
+        nF===cr.jobs.length?'ALL JOBS FEASIBLE':'ACTION REQUIRED']);
+    } else {
+      summaryRows.push(['Crew '+crew,'--','--','--','--','No jobs entered']);
+    }
+  });
+
+  if (!hasAny) { alert('No jobs entered for '+shop+' yet.'); return; }
+
+  var sumWs = XLSX.utils.aoa_to_sheet(summaryRows);
+  sumWs['!cols'] = [{wch:12},{wch:12},{wch:10},{wch:14},{wch:16},{wch:22}];
+  wb.SheetNames.unshift('Summary');
+  wb.Sheets['Summary'] = sumWs;
+
+  XLSX.writeFile(wb, shop+'_AllCrews_Schedule.xlsx');
 }
 
 // ── timeline ─────────────────────────────────────────────────────────────────
@@ -670,8 +738,10 @@ function renderTimeline(shop) {
   var dpr = window.devicePixelRatio || 1;
   canvas.width  = totalW * dpr;
   canvas.height = totalH * dpr;
-  canvas.style.width  = totalW + 'px';
-  canvas.style.height = totalH + 'px';
+  canvas.style.width      = totalW + 'px';
+  canvas.style.height     = totalH + 'px';
+  canvas.style.display    = 'block';
+  canvas.style.minWidth   = '0';
 
   var ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
