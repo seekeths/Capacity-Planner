@@ -385,8 +385,11 @@ function pd(s){ var p=s.split('-').map(Number); return new Date(p[0],p[1]-1,p[2]
 function fmt(d){ return d.toLocaleDateString('en-US',{month:'short',day:'2-digit',year:'numeric'}); }
 function addD(d,n){ var r=new Date(d); r.setDate(r.getDate()+n); return r; }
 function nextMon(d){
-  var r=new Date(d),day=r.getDay();
-  r.setDate(r.getDate()+(day===1?0:day===0?1:8-day));
+  // Go back to the Monday of the week containing d
+  // JS getDay: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+  var r=new Date(d), day=r.getDay();
+  var toMon = day===0 ? -6 : 1-day;  // Sun→-6, Mon→0, Tue→-1, Wed→-2, etc.
+  r.setDate(r.getDate()+toMon);
   return r;
 }
 
