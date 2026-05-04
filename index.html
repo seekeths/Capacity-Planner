@@ -247,7 +247,6 @@ var saveTimer=null;
 function saveNow() {
   savePlan(current.shop, current.crew, currentState());
   updateDots();
-renderTimeline(current.shop);
   renderTimeline(current.shop);
   var tag=document.getElementById('savedTag');
   tag.textContent='💾 Saved';
