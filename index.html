@@ -116,6 +116,14 @@
   .xrow .hint{font-size:12px;color:var(--text3);}
   #results{display:none;}
 
+  /* timeline */
+  .timeline-card{background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1rem;}
+  .timeline-scroll{overflow-x:auto;padding-bottom:4px;}
+  .tl-legend{display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;}
+  .tl-legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);}
+  .tl-legend-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0;}
+  .tl-empty{font-size:13px;color:var(--text3);padding:1rem 0;}
+
   /* dialog */
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .15s;}
   .overlay.show{opacity:1;pointer-events:all;}
@@ -186,6 +194,14 @@
   </div>
 </div>
 
+<div class="timeline-card" id="timelineCard" style="display:none;">
+  <p class="slabel">Job Timeline — All Crews</p>
+  <div class="tl-legend" id="tlLegend"></div>
+  <div class="timeline-scroll">
+    <canvas id="tlCanvas"></canvas>
+  </div>
+</div>
+
 <div class="overlay" id="overlay">
   <div class="dialog">
     <h3 id="dlgTitle">Reset this planner?</h3>
@@ -200,7 +216,7 @@
 <script>
 // ── config ────────────────────────────────────────────────────────────────────
 var SHOPS  = ['Merced','Modesto','Stockton','Jackson','Sonora'];
-var CREWS  = ['43L','44L','46L'];
+var CREWS  = ['46L','44L','43L'];
 var STORE  = 'tcp_v3_';
 var uid    = 0;
 var R      = null;
@@ -227,6 +243,8 @@ var saveTimer=null;
 function saveNow() {
   savePlan(current.shop, current.crew, currentState());
   updateDots();
+renderTimeline(current.shop);
+  renderTimeline(current.shop);
   var tag=document.getElementById('savedTag');
   tag.textContent='💾 Saved';
   clearTimeout(saveTimer);
@@ -281,6 +299,7 @@ function switchPlan(shop, crew) {
   document.getElementById('results').style.display='none';
   document.getElementById('errMsg').textContent='';
   R=null;
+  renderTimeline(shop);
 }
 
 function updateDots() {
@@ -441,6 +460,7 @@ function runSchedule(){
   renderUI();
   document.getElementById('results').style.display='block';
   document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+  renderTimeline(current.shop);
 }
 
 // ── render ────────────────────────────────────────────────────────────────────
@@ -554,6 +574,211 @@ function downloadExcel(){
 
   var fname=current.shop+'_Crew'+current.crew+'_Schedule.xlsx';
   XLSX.writeFile(wb,fname);
+}
+
+// ── timeline ─────────────────────────────────────────────────────────────────
+// roundRect polyfill for older browsers
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+    this.beginPath();
+    this.moveTo(x+r,y);
+    this.lineTo(x+w-r,y);
+    this.quadraticCurveTo(x+w,y,x+w,y+r);
+    this.lineTo(x+w,y+h-r);
+    this.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    this.lineTo(x+r,y+h);
+    this.quadraticCurveTo(x,y+h,x,y+h-r);
+    this.lineTo(x,y+r);
+    this.quadraticCurveTo(x,y,x+r,y);
+    this.closePath();
+  };
+}
+
+var CREW_COLORS = {'43L':'#3b82f6','44L':'#f59e0b','46L':'#10b981'};
+var CREW_LABELS = {'43L':'Crew 43L','44L':'Crew 44L','46L':'Crew 46L'};
+
+function renderTimeline(shop) {
+  var card = document.getElementById('timelineCard');
+  var canvas = document.getElementById('tlCanvas');
+  var legend = document.getElementById('tlLegend');
+
+  // load jobs for all 3 crews of this shop
+  var crewJobs = {};
+  var hasAny = false;
+  CREWS.forEach(function(crew) {
+    var state = loadPlan(shop, crew);
+    var jobs = (state && state.jobs || []).filter(function(j){ return j.id && j.start && j.end; });
+    crewJobs[crew] = jobs;
+    if (jobs.length) hasAny = true;
+  });
+
+  if (!hasAny) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+
+  // collect all unique job IDs across crews (preserve order of first appearance)
+  var jobOrder = [];   // lowercase keys for matching
+  var jobLabels = {};  // original casing for display
+  var seen = {};
+  CREWS.forEach(function(crew) {
+    crewJobs[crew].forEach(function(j) {
+      var raw = j.id || j.name;
+      var key = raw.toLowerCase();
+      if (!seen[key]) {
+        seen[key] = true;
+        jobOrder.push(key);
+        jobLabels[key] = raw;  // store original for display
+      }
+    });
+  });
+
+  // find overall date range
+  var minDate = null, maxDate = null;
+  CREWS.forEach(function(crew) {
+    crewJobs[crew].forEach(function(j) {
+      var s = pd(j.start), e = pd(j.end);
+      if (!minDate || s < minDate) minDate = s;
+      if (!maxDate || e > maxDate) maxDate = e;
+    });
+  });
+  // add 1 week padding each side
+  minDate = addD(minDate, -7);
+  maxDate = addD(maxDate, 7);
+  var totalDays = Math.round((maxDate - minDate) / 86400000);
+
+  // layout constants
+  var labelW  = 110;
+  var dayW    = 18;
+  var rowH    = 56;   // height per job (holds 3 crew bars)
+  var barH    = 13;
+  var barGap  = 3;
+  var headerH = 36;
+  var padLeft = labelW + 8;
+
+  var totalW = padLeft + totalDays * dayW + 20;
+  var totalH = headerH + jobOrder.length * rowH + 16;
+
+  // set canvas size
+  var dpr = window.devicePixelRatio || 1;
+  canvas.width  = totalW * dpr;
+  canvas.height = totalH * dpr;
+  canvas.style.width  = totalW + 'px';
+  canvas.style.height = totalH + 'px';
+
+  var ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  // background
+  var isDark = window.matchMedia('(prefers-color-scheme:dark)').matches;
+  var bgColor      = isDark ? '#1e1e1c' : '#ffffff';
+  var gridColor    = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+  var textColor    = isDark ? '#a8a8a4' : '#6b6b6b';
+  var labelColor   = isDark ? '#f0f0ee' : '#1a1a1a';
+  var altRowColor  = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)';
+
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, totalW, totalH);
+
+  // alternate row backgrounds
+  jobOrder.forEach(function(jid, idx) {
+    if (idx % 2 === 0) {
+      ctx.fillStyle = altRowColor;
+      ctx.fillRect(0, headerH + idx * rowH, totalW, rowH);
+    }
+  });
+
+  // date header — show month labels
+  ctx.font = '500 11px -apple-system,BlinkMacSystemFont,sans-serif';
+  ctx.fillStyle = textColor;
+  var lastMonth = -1;
+  for (var d = 0; d <= totalDays; d++) {
+    var date = addD(minDate, d);
+    var x = padLeft + d * dayW;
+    // vertical grid line on Mondays
+    if (date.getDay() === 1) {
+      ctx.strokeStyle = gridColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, headerH - 4);
+      ctx.lineTo(x, totalH);
+      ctx.stroke();
+      // week tick label
+      var dayLabel = (date.getMonth()+1)+'/'+date.getDate();
+      ctx.fillStyle = textColor;
+      ctx.fillText(dayLabel, x + 2, headerH - 8);
+    }
+    // month label
+    if (date.getMonth() !== lastMonth) {
+      lastMonth = date.getMonth();
+      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      ctx.font = 'bold 11px -apple-system,BlinkMacSystemFont,sans-serif';
+      ctx.fillStyle = labelColor;
+      ctx.fillText(months[date.getMonth()]+' '+date.getFullYear(), x + 2, headerH - 20);
+      ctx.font = '500 11px -apple-system,BlinkMacSystemFont,sans-serif';
+    }
+  }
+
+  // draw jobs
+  jobOrder.forEach(function(jid, idx) {
+    var y = headerH + idx * rowH;
+
+    // job label
+    ctx.font = '500 12px -apple-system,BlinkMacSystemFont,sans-serif';
+    ctx.fillStyle = labelColor;
+    ctx.fillText(jobLabels[jid] || jid, 8, y + rowH/2 + 4);
+
+    // separator line
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, y + rowH);
+    ctx.lineTo(totalW, y + rowH);
+    ctx.stroke();
+
+    // draw a bar for each crew
+    CREWS.forEach(function(crew, ci) {
+      var jobs = crewJobs[crew];
+      var job = null;
+      for (var k=0; k<jobs.length; k++) {
+        if ((jobs[k].id || jobs[k].name).toLowerCase() === jid) { job = jobs[k]; break; }
+      }
+      if (!job) return;
+
+      var s = pd(job.start), e = pd(job.end);
+      var sx = padLeft + Math.round((s - minDate) / 86400000) * dayW;
+      var ex = padLeft + Math.round((e - minDate) / 86400000) * dayW + dayW;
+      var bw = Math.max(ex - sx, dayW);
+      var by = y + 6 + ci * (barH + barGap);
+
+      // bar shadow/bg
+      ctx.fillStyle = CREW_COLORS[crew] + '30';
+      ctx.beginPath();
+      ctx.roundRect(sx, by, bw, barH, 3);
+      ctx.fill();
+
+      // bar fill
+      ctx.fillStyle = CREW_COLORS[crew];
+      ctx.beginPath();
+      ctx.roundRect(sx, by, bw, barH, 3);
+      ctx.fill();
+
+      // label inside bar if wide enough
+      if (bw > 40) {
+        ctx.font = '500 10px -apple-system,BlinkMacSystemFont,sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(crew, sx + 5, by + barH - 3);
+      }
+    });
+  });
+
+  // legend
+  legend.innerHTML = CREWS.map(function(crew) {
+    return '<div class="tl-legend-item">' +
+      '<span class="tl-legend-dot" style="background:' + CREW_COLORS[crew] + '"></span>' +
+      CREW_LABELS[crew] + '</div>';
+  }).join('');
 }
 
 // ── init ──────────────────────────────────────────────────────────────────────
