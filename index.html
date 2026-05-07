@@ -4,6 +4,31 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Capacity Planner</title>
+<!-- Firebase SDKs -->
+<script type="module">
+import { initializeApp }                     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyBWNbaknK8-9e1YSdFYByLzd2COYCaHCSs",
+  authDomain:        "capacity-planner-daniel.firebaseapp.com",
+  projectId:         "capacity-planner-daniel",
+  storageBucket:     "capacity-planner-daniel.firebasestorage.app",
+  messagingSenderId: "14212785065",
+  appId:             "1:14212785065:web:01256b8e547aec41e19ab8"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+
+window._db      = db;
+window._doc     = doc;
+window._getDoc  = getDoc;
+window._setDoc  = setDoc;
+window._fbReady = true;
+
+window.dispatchEvent(new Event('firebase-ready'));
+</script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -76,6 +101,7 @@
   .bignore.active{background:var(--red-bg);color:var(--red-text);border-color:var(--red-text);}
   .jrow:hover{border-color:var(--border2);}
   .jrow input{height:30px;padding:0 8px;border:0.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px;font-family:var(--font);width:100%;outline:none;transition:border-color .15s;}
+  .jrow input.jid{text-transform:uppercase;}
   .jrow input:focus{border-color:var(--border3);}
   .jrow input[type="date"]{font-size:11px;padding:0 6px;}
   .bdel{width:30px;height:30px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
@@ -228,13 +254,61 @@ var current = { shop: SHOPS[0], crew: CREWS[0] };
 function planKey(shop, crew) { return STORE + shop + '_' + crew; }
 function currentKey()        { return planKey(current.shop, current.crew); }
 
-// ── storage ───────────────────────────────────────────────────────────────────
+// ── storage (Firestore + localStorage fallback) ───────────────────────────────
+
+// In-memory cache so we don't hit Firestore on every keystroke
+var planCache = {};
+
+function planKey(shop, crew) { return STORE + shop + '_' + crew; }
+
+// Load a plan — returns a Promise that resolves to the state object or null
+function loadPlanAsync(shop, crew) {
+  var key = shop + '_' + crew;
+  if (planCache[key] !== undefined) return Promise.resolve(planCache[key]);
+
+  if (window._fbReady) {
+    var ref = window._doc(window._db, 'planners', key);
+    return window._getDoc(ref).then(function(snap) {
+      var data = snap.exists() ? snap.data() : null;
+      planCache[key] = data;
+      return data;
+    }).catch(function() {
+      // Firestore failed — fall back to localStorage
+      try { var r=localStorage.getItem(planKey(shop,crew)); var d=r?JSON.parse(r):null; planCache[key]=d; return d; } catch(e){ return null; }
+    });
+  } else {
+    try { var r=localStorage.getItem(planKey(shop,crew)); var d=r?JSON.parse(r):null; planCache[key]=d; return Promise.resolve(d); } catch(e){ return Promise.resolve(null); }
+  }
+}
+
+// Synchronous load from cache only (used in timeline / dot rendering)
 function loadPlan(shop, crew) {
+  var key = shop + '_' + crew;
+  if (planCache[key] !== undefined) return planCache[key];
+  // Fall back to localStorage while waiting for Firestore
   try { var r=localStorage.getItem(planKey(shop,crew)); return r?JSON.parse(r):null; } catch(e){ return null; }
 }
+
 function savePlan(shop, crew, state) {
+  var key = shop + '_' + crew;
+  planCache[key] = state;  // update cache immediately
+
+  // Save to localStorage as instant fallback
   try { localStorage.setItem(planKey(shop,crew), JSON.stringify(state)); } catch(e){}
+
+  // Save to Firestore async (non-blocking)
+  if (window._fbReady) {
+    var ref = window._doc(window._db, 'planners', key);
+    window._setDoc(ref, state).then(function() {
+      console.log('Firestore saved:', key);
+    }).catch(function(e) {
+      console.warn('Firestore save failed, localStorage kept:', e);
+    });
+  } else {
+    console.warn('Firebase not ready — saved to localStorage only');
+  }
 }
+
 function currentState() {
   return {
     tc:   parseInt(document.getElementById('techCount').value)||5,
@@ -242,15 +316,16 @@ function currentState() {
     jobs: getJobs()
   };
 }
-var saveTimer=null;
+
+var saveTimer = null;
 function saveNow() {
   savePlan(current.shop, current.crew, currentState());
   updateDots();
   renderTimeline(current.shop);
-  var tag=document.getElementById('savedTag');
-  tag.textContent='💾 Saved';
+  var tag = document.getElementById('savedTag');
+  tag.textContent = '💾 Saved';
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(function(){ tag.textContent='💾 Auto-saved'; },1500);
+  saveTimer = setTimeout(function(){ tag.textContent = '💾 Auto-saved'; }, 1500);
 }
 
 // ── build sidebar nav ─────────────────────────────────────────────────────────
@@ -295,15 +370,21 @@ function switchPlan(shop, crew) {
 
   document.getElementById('pageTitle').textContent = shop+' — Crew '+crew;
 
-  var state = loadPlan(shop,crew) || {tc:5,hp:40,jobs:[]};
-  loadIntoUI(state);
   document.getElementById('results').style.display='none';
   document.getElementById('errMsg').textContent='';
   R=null;
-  renderTimeline(shop);
-  // auto-run schedule if this crew has valid jobs saved
-  var hasJobs = (state.jobs||[]).some(function(j){ return j.id && j.start && j.end && j.hrs>0; });
-  if(hasJobs) runSchedule();
+
+  var tag = document.getElementById('savedTag');
+  tag.textContent = '⏳ Loading...';
+
+  loadPlanAsync(shop, crew).then(function(state) {
+    state = state || {tc:5,hp:40,jobs:[]};
+    loadIntoUI(state);
+    renderTimeline(shop);
+    tag.textContent = '💾 Auto-saved';
+    var hasJobs = (state.jobs||[]).some(function(j){ return j.id && j.start && j.end && j.hrs>0; });
+    if(hasJobs) runSchedule();
+  });
 }
 
 function updateDots() {
@@ -373,7 +454,7 @@ function getJobs(){
   return Array.from(document.querySelectorAll('.jrow')).map(function(r){
     var pinVal = r.querySelector('.jpin').value.trim();
     return {
-      id:      r.querySelector('.jid').value.trim(),
+      id:      r.querySelector('.jid').value.trim().toUpperCase(),
       name:    r.querySelector('.jname').value.trim(),
       hrs:     parseFloat(r.querySelector('.jhrs').value)||0,
       start:   r.querySelector('.jsd').value,
@@ -455,8 +536,12 @@ function capacityFill(jobs, weeks, cap, hp){
       var key=j.id+'|'+ws.getTime(), sd=pd(j.start), ed=pd(j.end);
       if(ws>ed||we<sd||rem[j.id]<=0){ alloc[key]=0; return; }
       var os=sd>ws?sd:ws, oe=ed<we?ed:we;
-      var dtw=networkdays(os,oe), dr=networkdays(os,ed);
-      var max=dr>0?rem[j.id]*(dtw/dr):rem[j.id];
+      var dtw=networkdays(os,oe);
+      if(dtw===0){ alloc[key]=0; return; }
+      var dr=networkdays(os,ed);
+      var prop=dr>0?rem[j.id]*(dtw/dr):rem[j.id];
+      var physMax=(cap/5)*dtw;
+      var max=Math.min(prop,physMax);
       var assign=Math.min(max,rem[j.id],left);
       alloc[key]=assign; rem[j.id]-=assign; left-=assign;
     });
@@ -539,6 +624,23 @@ function lastAllocWeek(jid){
   return lw;
 }
 
+function daysTopush(j) {
+  // Find the first week after job's end date that has any remaining capacity
+  var jobEnd = pd(j.end);
+  for (var i=0; i<R.weeks.length; i++) {
+    var ws = R.weeks[i];
+    if (addD(ws,4) <= jobEnd) continue; // week ends before or on job end — skip
+    var assigned = R.wkA[ws.getTime()] || 0;
+    if (R.cap - assigned > 0.01) {
+      // This week has capacity — how far is its end from the job's end date?
+      return Math.round((addD(ws,4) - jobEnd) / 86400000);
+    }
+  }
+  // No free week found in planned range — estimate from remaining hours
+  var weeksNeeded = Math.ceil((R.alloc && Object.keys(R.alloc).length ? 1 : 1));
+  return 7 * weeksNeeded;
+}
+
 function buildJobsTable(){
   var rows=R.jobs.map(function(j){
     if(j.ignored){
@@ -547,8 +649,8 @@ function buildJobsTable(){
         '<td><span class="badge" style="background:var(--bg3);color:var(--text3)">Ignored</span></td>'+
         '<td>—</td><td>—</td></tr>';
     }
-    var f=R.feasible[j.id],dp=0;
-    if(!f){ var lw=lastAllocWeek(j.id); if(lw) dp=Math.round((addD(lw,4)-pd(j.end))/86400000); }
+    var f=R.feasible[j.id];
+    var dp = f ? 0 : daysTopush(j);
     var pinLabel = j.pinned ? ' <span style="font-size:10px;color:var(--text3)">('+j.pinned+' pinned)</span>' : '';
     return '<tr><td><b>'+j.id+'</b>'+pinLabel+'</td><td>'+j.name+'</td><td>'+j.hrs+'</td>'+
       '<td>'+fmt(pd(j.start))+'</td><td>'+fmt(pd(j.end))+'</td>'+
@@ -794,10 +896,46 @@ function renderTimeline(shop) {
 
 // ── init ──────────────────────────────────────────────────────────────────────
 buildNav();
-var initState=loadPlan(current.shop,current.crew)||{tc:5,hp:40,jobs:[]};
-loadIntoUI(initState);
-document.getElementById('pageTitle').textContent=current.shop+' — Crew '+current.crew;
-updateDots();
+document.getElementById('pageTitle').textContent = current.shop+' — Crew '+current.crew;
+
+function initApp() {
+  var tag = document.getElementById('savedTag');
+  tag.textContent = '⏳ Loading...';
+
+  // Pre-load all 15 planners into cache for instant switching
+  var loads = [];
+  SHOPS.forEach(function(shop) {
+    CREWS.forEach(function(crew) {
+      loads.push(loadPlanAsync(shop, crew));
+    });
+  });
+
+  Promise.all(loads).then(function() {
+    var initState = loadPlan(current.shop, current.crew) || {tc:5,hp:40,jobs:[]};
+    loadIntoUI(initState);
+    updateDots();
+    renderTimeline(current.shop);
+    tag.textContent = '💾 Auto-saved';
+    var hasJobs = (initState.jobs||[]).some(function(j){
+      return j.id && j.start && j.end && j.hrs > 0;
+    });
+    if (hasJobs) runSchedule();
+  });
+}
+
+// The Firebase module script sets window._fbReady and dispatches 'firebase-ready'
+// Since module scripts are deferred, by the time this runs _fbReady may already be set
+if (window._fbReady) {
+  initApp();
+} else {
+  window.addEventListener('firebase-ready', initApp);
+  // Fallback: if Firebase hasn't fired after 4 seconds, init with localStorage
+  setTimeout(function() {
+    if (document.getElementById('savedTag').textContent === '💾 Auto-saved') return;
+    console.warn('Firebase timeout — using localStorage fallback');
+    initApp();
+  }, 4000);
+}
 </script>
 </body>
 </html>
