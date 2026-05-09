@@ -93,17 +93,19 @@ window.dispatchEvent(new Event('firebase-ready'));
   .field input:focus{border-color:var(--border3);background:var(--bg);box-shadow:0 0 0 3px rgba(0,0,0,.06);}
 
   /* jobs */
-  .jhdr{display:grid;grid-template-columns:90px 1fr 90px 130px 130px 60px 36px 36px;gap:8px;padding:0 8px 8px;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;}
-  .jrow{display:grid;grid-template-columns:90px 1fr 90px 130px 130px 60px 36px 36px;gap:8px;align-items:center;padding:8px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);margin-bottom:6px;transition:border-color .15s,opacity .15s;}
+  .jhdr{display:grid;grid-template-columns:90px 1fr 60px 130px 130px 60px 36px 36px 36px;gap:8px;padding:0 8px 8px;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;}
+  .jrow{display:grid;grid-template-columns:90px 1fr 60px 130px 130px 60px 36px 36px 36px;gap:8px;align-items:center;padding:8px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);margin-bottom:6px;transition:border-color .15s,opacity .15s;}
   .jrow.ignored{opacity:0.4;}
   .bignore{width:30px;height:30px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s;font-family:var(--font);}
   .bignore:hover{background:var(--bg3);}
   .bignore.active{background:var(--red-bg);color:var(--red-text);border-color:var(--red-text);}
   .jrow:hover{border-color:var(--border2);}
   .jrow input{height:30px;padding:0 8px;border:0.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px;font-family:var(--font);width:100%;outline:none;transition:border-color .15s;}
-  .jrow input.jid{text-transform:uppercase;}
   .jrow input:focus{border-color:var(--border3);}
   .jrow input[type="date"]{font-size:11px;padding:0 6px;}
+    .bcopy{width:30px;height:30px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+  .bcopy:hover{background:var(--green-bg);color:var(--green-text);border-color:var(--green-text);}
+  .bcopy.copied{background:var(--green-bg);color:var(--green-text);border-color:var(--green-text);}
   .bdel{width:30px;height:30px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
   .bdel:hover{background:var(--red-bg);color:var(--red-text);border-color:var(--red-text);}
 
@@ -195,7 +197,7 @@ window.dispatchEvent(new Event('firebase-ready'));
     <p class="slabel">Jobs</p>
     <div class="jhdr">
       <span>Job ID</span><span>Description</span><span>Hours</span>
-      <span>Start date</span><span>End date</span><span title="Pin specific techs to this job">Pinned Techs</span><span></span><span></span>
+      <span>Start date</span><span>End date</span><span title="Pin specific techs to this job">Pinned Techs</span><span></span><span></span><span></span>
     </div>
     <div id="jobsList"></div>
     <div class="actions">
@@ -428,7 +430,8 @@ function addJob(d,skipSave){
     '<input class="jsd"   type="date"   value="'+(d.start||'')+'">' +
     '<input class="jed"   type="date"   value="'+(d.end||'')+'">' +
     '<input class="jpin"  type="number" placeholder="—" min="1" title="Pin techs to this job" value="'+(d.pinned||'')+'">' +
-    '<button class="bignore'+(ignored?' active':'')+'" title="Ignore this job" onclick="toggleIgnore(this)">'+(ignored?'🚫':'○')+'</button>' +
+    '<button class="bcopy" title="Copy job to other crews" onclick="copyToCrews(this)">⇥</button>' +
+    '<button class="bignore'+(ignored?' active':'')+' " title="Ignore this job" onclick="toggleIgnore(this)">'+(ignored?'🚫':'○')+'</button>' +
     '<button class="bdel" onclick="removeJob(this)">✕</button>';
   if (ignored) row.classList.add('ignored');
   row.querySelectorAll('input').forEach(function(inp){
@@ -450,11 +453,46 @@ function toggleIgnore(btn){
   saveNow();
 }
 
+function copyToCrews(btn) {
+  var row  = btn.closest('.jrow');
+  var jid  = row.querySelector('.jid').value.trim();
+  var name = row.querySelector('.jname').value.trim();
+  var hrs  = row.querySelector('.jhrs').value.trim();
+
+  if (!jid) { alert('Enter a Job ID first.'); return; }
+
+  // Save current crew's state first
+  saveNow();
+
+  // Copy to the other 2 crews in this shop
+  var otherCrews = CREWS.filter(function(c){ return c !== current.crew; });
+  var promises = otherCrews.map(function(crew) {
+    return loadPlanAsync(current.shop, crew).then(function(state) {
+      state = state || { tc:5, hp:40, jobs:[] };
+      // Check if job ID already exists in that crew
+      var exists = (state.jobs||[]).some(function(j){ return j.id && j.id.toUpperCase() === jid.toUpperCase(); });
+      if (!exists) {
+        state.jobs = state.jobs || [];
+        state.jobs.push({ id: jid, name: name, hrs: parseFloat(hrs)||0, start:'', end:'', pinned:null, ignored:false });
+        savePlan(current.shop, crew, state);
+      }
+    });
+  });
+
+  Promise.all(promises).then(function() {
+    // Visual feedback
+    btn.classList.add('copied');
+    btn.textContent = '✓';
+    setTimeout(function(){ btn.classList.remove('copied'); btn.textContent = '⇥'; }, 1500);
+    updateDots();
+  });
+}
+
 function getJobs(){
   return Array.from(document.querySelectorAll('.jrow')).map(function(r){
     var pinVal = r.querySelector('.jpin').value.trim();
     return {
-      id:      r.querySelector('.jid').value.trim().toUpperCase(),
+      id:      r.querySelector('.jid').value.trim(),
       name:    r.querySelector('.jname').value.trim(),
       hrs:     parseFloat(r.querySelector('.jhrs').value)||0,
       start:   r.querySelector('.jsd').value,
@@ -520,7 +558,9 @@ function capacityFill(jobs, weeks, cap, hp){
       var key=j.id+'|'+ws.getTime(), sd=pd(j.start), ed=pd(j.end);
       if(ws>ed||we<sd||rem[j.id]<=0){ alloc[key]=0; return; }
       var os=sd>ws?sd:ws, oe=ed<we?ed:we;
-      var dtw=networkdays(os,oe), dr=networkdays(os,ed);
+      var dtw=networkdays(os,oe);
+      if(dtw===0){ alloc[key]=0; return; }
+      var dr=networkdays(os,ed);
       // Pinned tech capacity: pinned techs * hrs/tech/day * workdays active this week
       var hrsPerTechPerDay = hp / 5;
       var pinnedWeekCap = j.pinned * hrsPerTechPerDay * dtw;
@@ -569,8 +609,8 @@ function runSchedule(){
   var activeJobs = jobs.filter(function(j){ return !j.ignored; });
   if(!activeJobs.length)       return setErr('All jobs are ignored — nothing to schedule.');
 
-  var first=jobs.reduce(function(m,j){ return pd(j.start)<m?pd(j.start):m; },pd(jobs[0].start));
-  var last=jobs.reduce(function(m,j){ return pd(j.end)>m?pd(j.end):m; },pd(jobs[0].end));
+  var first=activeJobs.reduce(function(m,j){ return pd(j.start)<m?pd(j.start):m; },pd(activeJobs[0].start));
+  var last=activeJobs.reduce(function(m,j){ return pd(j.end)>m?pd(j.end):m; },pd(activeJobs[0].end));
   var schedStart=nextMon(first);
   // auto-calc weeks needed to cover all jobs + 3 buffer weeks
   var msPerWeek=7*24*60*60*1000;
@@ -625,21 +665,54 @@ function lastAllocWeek(jid){
 }
 
 function daysTopush(j) {
-  // Find the first week after job's end date that has any remaining capacity
-  var jobEnd = pd(j.end);
-  for (var i=0; i<R.weeks.length; i++) {
+  // Calculate how many additional calendar days are needed beyond the job's end date
+  // by simulating how long it takes to drain the remaining hours through available capacity
+  var jobEnd   = pd(j.end);
+  var jid      = j.id;
+  var remaining = R.alloc ? (function(){
+    var r = j.hrs;
+    R.weeks.forEach(function(ws){ r -= (R.alloc[jid+'|'+ws.getTime()]||0); });
+    return Math.max(r, 0);
+  })() : j.hrs;
+
+  if (remaining <= 0.01) return 0;
+
+  // Walk through weeks after the job end, consuming remaining hours day by day
+  // using the daily capacity rate
+  var dailyCap = R.cap / 5;  // total capacity per working day
+  var hoursLeft = remaining;
+  var daysOver  = 0;
+
+  for (var i = 0; i < R.weeks.length; i++) {
     var ws = R.weeks[i];
-    if (addD(ws,4) <= jobEnd) continue; // week ends before or on job end — skip
-    var assigned = R.wkA[ws.getTime()] || 0;
-    if (R.cap - assigned > 0.01) {
-      // This week has capacity — how far is its end from the job's end date?
-      return Math.round((addD(ws,4) - jobEnd) / 86400000);
+    var we = addD(ws, 4);
+    if (we <= jobEnd) continue;  // week is fully before job end
+
+    // Walk each working day of this week that falls after jobEnd
+    for (var d = 0; d < 7; d++) {
+      var day = addD(ws, d);
+      if (day <= jobEnd) continue;         // before or on end date
+      if (day.getDay() === 0 || day.getDay() === 6) continue;  // weekend
+      daysOver++;
+      // How much capacity is available this day?
+      // Approximate: spread this week's remaining capacity evenly across its workdays
+      var weekAssigned = R.wkA[ws.getTime()] || 0;
+      var weekRemCap   = Math.max(R.cap - weekAssigned, 0);
+      // Use full daily cap if this is a future week (not the job's overlap week)
+      var dayAvail = ws > jobEnd ? dailyCap : Math.min(dailyCap, weekRemCap / 5);
+      hoursLeft -= dayAvail;
+      if (hoursLeft <= 0.01) return daysOver;
     }
   }
-  // No free week found in planned range — estimate from remaining hours
-  var weeksNeeded = Math.ceil((R.alloc && Object.keys(R.alloc).length ? 1 : 1));
-  return 7 * weeksNeeded;
+
+  // If we ran out of planned weeks, estimate remaining
+  if (hoursLeft > 0) {
+    var extraDays = Math.ceil(hoursLeft / dailyCap);
+    daysOver += extraDays;
+  }
+  return daysOver;
 }
+
 
 function buildJobsTable(){
   var rows=R.jobs.map(function(j){
@@ -657,7 +730,7 @@ function buildJobsTable(){
       '<td><span class="badge '+(f?'ok':'bad')+'">'+(f?'Possible':'Not possible')+'</span></td>'+
       '<td>'+(dp>0?dp+' days':'—')+'</td><td>'+(R.priority[j.id]||'—')+'</td></tr>';
   }).join('');
-  return '<table><thead><tr><th>Job ID</th><th>Description</th><th>Hours</th><th>Start</th><th>End</th><th>Status</th><th>Days to push</th><th>Priority</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  return '<table><thead><tr><th>Job ID</th><th>Description</th><th>Hours</th><th>Start</th><th>End</th><th>Status</th><th>Days late</th><th>Priority</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
 function buildWeeksTable(){
