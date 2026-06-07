@@ -191,9 +191,15 @@ window.dispatchEvent(new Event('firebase-ready'));
       <div class="field"><label>Technicians</label><input type="number" id="techCount" value="5" min="1" oninput="saveNow();updateCrewCapacity()"></div>
       <div class="field"><label>Weekly Hours Worked</label><input type="number" id="hrsPerWeek" value="40" min="1" oninput="saveNow();updateCrewCapacity()"></div>
     </div>
-    <div style="margin-top:12px;padding:10px 14px;background:var(--bg2);border-radius:var(--r);display:flex;align-items:center;justify-content:space-between;">
-      <span style="font-size:12px;color:var(--text2);font-weight:500;">Weekly Crew Capacity</span>
-      <span id="crewCapacity" style="font-size:18px;font-weight:600;color:var(--green-text);">200 hrs</span>
+    <div style="margin-top:12px;padding:10px 14px;background:var(--bg2);border-radius:var(--r);">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-size:12px;color:var(--text2);font-weight:500;">Monthly Crew Capacity</span>
+        <span id="crewCapacity" style="font-size:18px;font-weight:600;color:var(--green-text);">867 hrs</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:0.5px solid var(--border);">
+        <span id="currentMonthLabel" style="font-size:12px;color:var(--text2);font-weight:500;">— Remaining</span>
+        <span id="crewMonthRemaining" style="font-size:15px;font-weight:600;color:var(--green-text);">— hrs</span>
+      </div>
     </div>
   </div>
 
@@ -327,6 +333,7 @@ var saveTimer = null;
 function saveNow() {
   savePlan(current.shop, current.crew, currentState());
   updateDots();
+  updateCrewCapacity();
   renderTimeline(current.shop);
   var tag = document.getElementById('savedTag');
   tag.textContent = '💾 Saved';
@@ -521,8 +528,42 @@ function setErr(m){ document.getElementById('errMsg').textContent=m||''; }
 function updateCrewCapacity() {
   var tc = parseInt(document.getElementById('techCount').value) || 0;
   var hp = parseInt(document.getElementById('hrsPerWeek').value) || 0;
-  var cap = tc * hp;
-  document.getElementById('crewCapacity').textContent = cap + ' hrs';
+  // Monthly capacity: weekly cap × avg weeks per month (52/12)
+  var weeklyCap = tc * hp;
+  var monthlyCap = Math.round(weeklyCap * (52 / 12));
+  document.getElementById('crewCapacity').textContent = monthlyCap + ' hrs';
+
+  // Current month remaining capacity
+  var now = new Date();
+  var monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var monthLabel = monthNames[now.getMonth()] + ' Remaining';
+  document.getElementById('currentMonthLabel').textContent = monthLabel;
+
+  // Sum hours from active (non-ignored) jobs that overlap the current month
+  var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  var monthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  var usedHrs = 0;
+  document.querySelectorAll('.jrow').forEach(function(row) {
+    if (row.classList.contains('ignored')) return;
+    var sd = row.querySelector('.jsd').value;
+    var ed = row.querySelector('.jed').value;
+    var hrs = parseFloat(row.querySelector('.jhrs').value) || 0;
+    if (!sd || !ed || hrs <= 0) return;
+    var start = pd(sd), end = pd(ed);
+    // Check if job overlaps current month
+    if (start > monthEnd || end < monthStart) return;
+    // Proportion of job days that fall within this month
+    var overlapStart = start < monthStart ? monthStart : start;
+    var overlapEnd   = end   > monthEnd   ? monthEnd   : end;
+    var jobDays   = networkdays(start, end);
+    var overlapDays = networkdays(overlapStart, overlapEnd);
+    if (jobDays > 0) usedHrs += hrs * (overlapDays / jobDays);
+  });
+
+  var remaining = Math.round(monthlyCap - usedHrs);
+  var remEl = document.getElementById('crewMonthRemaining');
+  remEl.textContent = remaining + ' hrs';
+  remEl.style.color = remaining < 0 ? 'var(--red-text)' : 'var(--green-text)';
 }
 
 function switchTab(name){
