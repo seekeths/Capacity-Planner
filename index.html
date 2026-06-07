@@ -189,7 +189,7 @@ window.dispatchEvent(new Event('firebase-ready'));
     <p class="slabel">Crew</p>
     <div class="sgrid">
       <div class="field"><label>Technicians</label><input type="number" id="techCount" value="5" min="1" oninput="saveNow();updateCrewCapacity()"></div>
-      <div class="field"><label>Weekly Hours Worked</label><input type="number" id="hrsPerWeek" value="40" min="1" oninput="saveNow();updateCrewCapacity()"></div>
+      <div class="field"><label>Total Weekly Hours Per Technician</label><input type="number" id="hrsPerWeek" value="40" min="1" oninput="saveNow();updateCrewCapacity()"></div>
     </div>
     <div style="margin-top:12px;padding:10px 14px;background:var(--bg2);border-radius:var(--r);">
       <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -197,7 +197,7 @@ window.dispatchEvent(new Event('firebase-ready'));
         <span id="crewCapacity" style="font-size:18px;font-weight:600;color:var(--green-text);">867 hrs</span>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:0.5px solid var(--border);">
-        <span id="currentMonthLabel" style="font-size:12px;color:var(--text2);font-weight:500;">— Remaining</span>
+        <span id="currentMonthLabel" style="font-size:12px;color:var(--text2);font-weight:500;">— Remaining Capacity</span>
         <span id="crewMonthRemaining" style="font-size:15px;font-weight:600;color:var(--green-text);">— hrs</span>
       </div>
     </div>
@@ -536,7 +536,7 @@ function updateCrewCapacity() {
   // Current month remaining capacity
   var now = new Date();
   var monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  var monthLabel = monthNames[now.getMonth()] + ' Remaining';
+  var monthLabel = monthNames[now.getMonth()] + ' Remaining Capacity';
   document.getElementById('currentMonthLabel').textContent = monthLabel;
 
   // Sum hours from active (non-ignored) jobs that overlap the current month
