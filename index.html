@@ -257,7 +257,7 @@ window.dispatchEvent(new Event('firebase-ready'));
 <script>
 // ── config ────────────────────────────────────────────────────────────────────
 var SHOPS  = ['Merced','Modesto','Stockton','Jackson','Sonora'];
-var CREWS  = ['46L','44L','43L'];
+var CREWS  = ['44L','43L'];
 var STORE  = 'tcp_v3_';
 var uid    = 0;
 var R      = null;
@@ -475,22 +475,18 @@ function copyToCrews(btn) {
   // Save current crew's state first
   saveNow();
 
-  // Copy to the other 2 crews in this shop
-  var otherCrews = CREWS.filter(function(c){ return c !== current.crew; });
-  var promises = otherCrews.map(function(crew) {
-    return loadPlanAsync(current.shop, crew).then(function(state) {
-      state = state || { tc:5, hp:40, jobs:[] };
-      // Check if job ID already exists in that crew
-      var exists = (state.jobs||[]).some(function(j){ return j.id && j.id.toUpperCase() === jid.toUpperCase(); });
-      if (!exists) {
-        state.jobs = state.jobs || [];
-        state.jobs.push({ id: jid, name: name, hrs: parseFloat(hrs)||0, start:'', end:'', pinned:null, ignored:false });
-        savePlan(current.shop, crew, state);
-      }
-    });
-  });
+  // Copy to the other crew in this shop (44L ↔ 43L)
+  var targetCrew = current.crew === '44L' ? '43L' : '44L';
 
-  Promise.all(promises).then(function() {
+  loadPlanAsync(current.shop, targetCrew).then(function(state) {
+    state = state || { tc:5, hp:40, jobs:[] };
+    // Check if job ID already exists in that crew
+    var exists = (state.jobs||[]).some(function(j){ return j.id && j.id.toUpperCase() === jid.toUpperCase(); });
+    if (!exists) {
+      state.jobs = state.jobs || [];
+      state.jobs.push({ id: jid, name: name, hrs: parseFloat(hrs)||0, start:'', end:'', pinned:null, ignored:false });
+      savePlan(current.shop, targetCrew, state);
+    }
     // Visual feedback
     btn.classList.add('copied');
     btn.textContent = '✓';
@@ -832,8 +828,8 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
   };
 }
 
-var CREW_COLORS = {'43L':'#3b82f6','44L':'#f59e0b','46L':'#10b981'};
-var CREW_LABELS = {'43L':'Crew 43L','44L':'Crew 44L','46L':'Crew 46L'};
+var CREW_COLORS = {'43L':'#3b82f6','44L':'#f59e0b'};
+var CREW_LABELS = {'43L':'Crew 43L','44L':'Crew 44L'};
 
 function renderTimeline(shop) {
   var card = document.getElementById('timelineCard');
