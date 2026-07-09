@@ -158,6 +158,16 @@ window.dispatchEvent(new Event('firebase-ready'));
   .tl-legend-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0;}
   .tl-empty{font-size:13px;color:var(--text3);padding:1rem 0;}
 
+  /* capacity adjustments */
+  .adj-group{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+  .adj-chip{display:flex;align-items:center;gap:6px;padding:6px 10px;border:0.5px solid var(--border2);border-radius:100px;font-size:12px;color:var(--text2);cursor:pointer;user-select:none;background:var(--bg);transition:all .15s;}
+  .adj-chip:hover{border-color:var(--border3);}
+  .adj-chip input{accent-color:var(--red-text);cursor:pointer;margin:0;}
+  .adj-chip .pct{font-size:10px;color:var(--text3);}
+  .adj-chip.active{background:var(--red-bg);color:var(--red-text);border-color:var(--red-text);}
+  .adj-chip.active .pct{color:var(--red-text);}
+  .adj-note{font-size:11px;color:var(--red-text);margin-top:6px;display:none;}
+
   /* dialog */
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .15s;}
   .overlay.show{opacity:1;pointer-events:all;}
@@ -183,6 +193,7 @@ window.dispatchEvent(new Event('firebase-ready'));
       <h1 id="pageTitle">—</h1>
       <p>Capacity-filling scheduler — Earliest Deadline First</p>
     </div>
+    <div class="adj-group" id="adjGroup"></div>
   </div>
 
   <div class="card">
@@ -201,6 +212,7 @@ window.dispatchEvent(new Event('firebase-ready'));
         <span id="crewMonthRemaining" style="font-size:15px;font-weight:600;color:var(--green-text);">— hrs</span>
       </div>
     </div>
+    <div class="adj-note" id="adjNote"></div>
   </div>
 
   <div class="card">
@@ -262,6 +274,58 @@ var STORE  = 'tcp_v3_';
 var uid    = 0;
 var R      = null;
 var current = { shop: SHOPS[0], crew: CREWS[0] };
+
+// ── capacity adjustments (vacation/holidays/sick/emergency) ────────────────────
+var CAPACITY_ADJUSTMENTS = [
+  {key:'vacation',  label:'Vacation',        pct:10},
+  {key:'holidays',  label:'Holidays',        pct:1},
+  {key:'sick',      label:'Sick Days',       pct:4},
+  {key:'emergency', label:'Emergency Work',  pct:10}
+];
+
+function buildAdjGroup(){
+  document.getElementById('adjGroup').innerHTML = CAPACITY_ADJUSTMENTS.map(function(a){
+    return '<label class="adj-chip" id="adjChip-'+a.key+'">'+
+      '<input type="checkbox" id="adj-'+a.key+'" onchange="onAdjChange()">'+
+      a.label+' <span class="pct">-'+a.pct+'%</span></label>';
+  }).join('');
+}
+
+function getAdjState(){
+  var adj={};
+  CAPACITY_ADJUSTMENTS.forEach(function(a){
+    var cb=document.getElementById('adj-'+a.key);
+    adj[a.key]= cb ? cb.checked : false;
+  });
+  return adj;
+}
+
+function setAdjState(adj){
+  adj = adj || {};
+  CAPACITY_ADJUSTMENTS.forEach(function(a){
+    var cb=document.getElementById('adj-'+a.key);
+    if(!cb) return;
+    cb.checked = !!adj[a.key];
+    document.getElementById('adjChip-'+a.key).classList.toggle('active', cb.checked);
+  });
+}
+
+function onAdjChange(){
+  CAPACITY_ADJUSTMENTS.forEach(function(a){
+    var cb=document.getElementById('adj-'+a.key);
+    document.getElementById('adjChip-'+a.key).classList.toggle('active', cb.checked);
+  });
+  saveNow();
+}
+
+// Returns a 0..1 multiplier — e.g. vacation+sick checked = 1 - (10+4)/100 = 0.86
+function calcAdjMultiplier(adj){
+  adj = adj || {};
+  var total = 0;
+  CAPACITY_ADJUSTMENTS.forEach(function(a){ if(adj[a.key]) total += a.pct; });
+  total = Math.min(total, 100);
+  return 1 - (total/100);
+}
 
 function planKey(shop, crew) { return STORE + shop + '_' + crew; }
 function currentKey()        { return planKey(current.shop, current.crew); }
@@ -325,6 +389,7 @@ function currentState() {
   return {
     tc:   parseInt(document.getElementById('techCount').value)||5,
     hp:   parseInt(document.getElementById('hrsPerWeek').value)||40,
+    adj:  getAdjState(),
     jobs: getJobs()
   };
 }
@@ -422,8 +487,8 @@ function showReset() {
 function hideReset(){ document.getElementById('overlay').classList.remove('show'); }
 function doReset(){
   hideReset();
-  savePlan(current.shop,current.crew,{tc:5,hp:40,jobs:[]});
-  loadIntoUI({tc:5,hp:40,jobs:[]});
+  savePlan(current.shop,current.crew,{tc:5,hp:40,adj:{},jobs:[]});
+  loadIntoUI({tc:5,hp:40,adj:{},jobs:[]});
   document.getElementById('results').style.display='none';
   R=null; updateDots();
 }
@@ -513,6 +578,7 @@ function getJobs(){
 function loadIntoUI(state){
   document.getElementById('techCount').value  = state.tc||5;
   document.getElementById('hrsPerWeek').value = state.hp||40;
+  setAdjState(state.adj);
   document.getElementById('jobsList').innerHTML='';
   uid=0;
   (state.jobs||[]).forEach(function(j){ addJob(j,true); });
@@ -524,10 +590,21 @@ function setErr(m){ document.getElementById('errMsg').textContent=m||''; }
 function updateCrewCapacity() {
   var tc = parseInt(document.getElementById('techCount').value) || 0;
   var hp = parseInt(document.getElementById('hrsPerWeek').value) || 0;
-  // Monthly capacity: weekly cap × avg weeks per month (52/12)
+  var adj = getAdjState();
+  var mult = calcAdjMultiplier(adj);
+  // Monthly capacity: weekly cap × avg weeks per month (52/12), reduced by any checked adjustments
   var weeklyCap = tc * hp;
-  var monthlyCap = Math.round(weeklyCap * (52 / 12));
+  var monthlyCap = Math.round(weeklyCap * (52 / 12) * mult);
   document.getElementById('crewCapacity').textContent = monthlyCap + ' hrs';
+
+  var adjNote = document.getElementById('adjNote');
+  var activeLabels = CAPACITY_ADJUSTMENTS.filter(function(a){ return adj[a.key]; }).map(function(a){ return a.label+' (-'+a.pct+'%)'; });
+  if (activeLabels.length) {
+    adjNote.textContent = 'Reduced by ' + activeLabels.join(', ') + ' — ' + Math.round((1-mult)*100) + '% total';
+    adjNote.style.display = 'block';
+  } else {
+    adjNote.style.display = 'none';
+  }
 
   // Current month remaining capacity
   var now = new Date();
@@ -642,7 +719,7 @@ function runSchedule(){
   setErr();
   var tc=parseInt(document.getElementById('techCount').value);
   var hp=parseInt(document.getElementById('hrsPerWeek').value);
-  var cap=tc*hp, jobs=getJobs();
+  var cap=tc*hp*calcAdjMultiplier(getAdjState()), jobs=getJobs();
 
   if(!jobs.length)             return setErr('Add at least one job.');
   // validate all jobs (including ignored) for data integrity
@@ -1004,8 +1081,9 @@ function renderTimeline(shop) {
       var crewState = loadPlan(shop, crew);
       var crewTc = (crewState && crewState.tc) ? crewState.tc : 5;
       var crewHp = (crewState && crewState.hp) ? crewState.hp : 40;
+      var crewMult = calcAdjMultiplier(crewState && crewState.adj);
       var workdays = networkdays(s, e);
-      var availableHours = crewTc * crewHp * (workdays / 5);
+      var availableHours = crewTc * crewHp * crewMult * (workdays / 5);
       var isUndercapacity = (job.hrs || 0) > availableHours + 0.01;
 
       // bar shadow/bg
@@ -1039,6 +1117,7 @@ function renderTimeline(shop) {
 
 // ── init ──────────────────────────────────────────────────────────────────────
 buildNav();
+buildAdjGroup();
 document.getElementById('pageTitle').textContent = current.shop+' — Crew '+current.crew;
 
 function initApp() {
