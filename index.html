@@ -180,7 +180,7 @@ window.dispatchEvent(new Event('firebase-ready'));
 <body>
 
 <nav class="sidebar">
-  <div class="sidebar-title">Capacity Planner<span>8 planners</span></div>
+  <div class="sidebar-title">Capacity Planner<span>2 planners</span></div>
 
   <div id="shopNav"></div>
 
@@ -268,7 +268,7 @@ window.dispatchEvent(new Event('firebase-ready'));
 
 <script>
 // ── config ────────────────────────────────────────────────────────────────────
-var SHOPS  = ['Foothills','Merced','Modesto','Stockton'];
+var SHOPS  = ['Foothills'];
 var CREWS  = ['44L','43L'];
 var STORE  = 'tcp_v3_';
 var uid    = 0;
@@ -409,18 +409,11 @@ function saveNow() {
 // ── build sidebar nav ─────────────────────────────────────────────────────────
 function buildNav() {
   var html='';
-  SHOPS.forEach(function(shop) {
-    var isFirstShop = shop===SHOPS[0];
-    html += '<div class="shop-group">';
-    html += '<div class="shop-header'+(isFirstShop?' open':'')+'" onclick="toggleShop(this)" data-shop="'+shop+'">';
-    html += '<span>'+shop+'</span><span class="chevron">›</span></div>';
-    html += '<div class="crew-list'+(isFirstShop?' open':'')+'">';
-    CREWS.forEach(function(crew) {
-      var isActive = isFirstShop && crew===CREWS[0];
-      html += '<div class="nav-item'+(isActive?' active':'')+'" data-shop="'+shop+'" data-crew="'+crew+'" onclick="switchPlan(\''+shop+'\',\''+crew+'\')">';
-      html += '<span class="nav-dot" id="dot-'+shop+'-'+crew+'"></span>Crew '+crew+'</div>';
-    });
-    html += '</div></div>';
+  var shop = SHOPS[0];
+  CREWS.forEach(function(crew) {
+    var isActive = crew===CREWS[0];
+    html += '<div class="nav-item'+(isActive?' active':'')+'" data-shop="'+shop+'" data-crew="'+crew+'" onclick="switchPlan(\''+shop+'\',\''+crew+'\')">';
+    html += '<span class="nav-dot" id="dot-'+shop+'-'+crew+'"></span>Crew '+crew+'</div>';
   });
   document.getElementById('shopNav').innerHTML = html;
 }
@@ -438,15 +431,7 @@ function switchPlan(shop, crew) {
     el.classList.toggle('active', el.dataset.shop===shop && el.dataset.crew===crew);
   });
 
-  // ensure this shop is expanded
-  document.querySelectorAll('.shop-header').forEach(function(el){
-    if(el.dataset.shop===shop){
-      el.classList.add('open');
-      el.nextElementSibling.classList.add('open');
-    }
-  });
-
-  document.getElementById('pageTitle').textContent = shop+' — Crew '+crew;
+  document.getElementById('pageTitle').textContent = 'Crew '+crew;
 
   document.getElementById('results').style.display='none';
   document.getElementById('errMsg').textContent='';
@@ -1118,7 +1103,7 @@ function renderTimeline(shop) {
 // ── init ──────────────────────────────────────────────────────────────────────
 buildNav();
 buildAdjGroup();
-document.getElementById('pageTitle').textContent = current.shop+' — Crew '+current.crew;
+document.getElementById('pageTitle').textContent = 'Crew '+current.crew;
 
 function initApp() {
   var tag = document.getElementById('savedTag');
